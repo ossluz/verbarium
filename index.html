@@ -5589,11 +5589,13 @@ function activateFirebase(config) {
 // ── USER SETUP MODAL ───────────────────────────────────────────────────────────
 function UserSetupModal({
   user,
+  authUser,
   onSave,
   t
 }) {
-  const [name, setName] = useState(user.name || "");
-  const [avatar, setAvatar] = useState(user.avatar || AVATARS[0]);
+  const [name, setName] = useState(authUser?.displayName || user.name || "");
+  const [avatarObj, setAvatarObj] = useState(user.avatar || AVATARS[0]);
+  const googlePhoto = authUser?.photoURL || null;
   const inp = {
     background: t.inp,
     border: `1px solid ${t.cb}`,
@@ -5612,7 +5614,7 @@ function UserSetupModal({
       marginBottom: 20,
       lineHeight: 1.6
     }
-  }, "Configure seu perfil para participar de salas colaborativas. Este nome aparecer\xE1 para outros membros."), /*#__PURE__*/React.createElement("div", {
+  }, "Configure seu perfil para as salas colaborativas.", authUser ? " Foto e nome importados da conta Google automaticamente." : ""), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16
     }
@@ -5645,38 +5647,22 @@ function UserSetupModal({
       display: "block",
       marginBottom: 8
     }
-  }, "Escolha seu Avatar"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 8
-    }
-  }, AVATARS.map(a => /*#__PURE__*/React.createElement("div", {
-    key: a,
-    onClick: () => setAvatar(a),
-    style: {
-      width: 44,
-      height: 44,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 24,
-      borderRadius: 12,
-      cursor: "pointer",
-      border: `2px solid ${avatar === a ? t.accent : t.cb}`,
-      background: avatar === a ? t.ag : "transparent",
-      transition: "all 0.15s"
-    }
-  }, a)))), /*#__PURE__*/React.createElement("button", {
+  }, "Avatar"), /*#__PURE__*/React.createElement(AvatarPicker, {
+    current: typeof avatarObj === "string" ? avatarObj : avatarObj?.value || AVATARS[0],
+    googlePhoto: googlePhoto,
+    onSave: setAvatarObj,
+    t: t
+  })), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (!name.trim()) return;
       onSave({
         ...user,
         name: name.trim(),
-        avatar
+        avatar: avatarObj
       });
     },
     style: {
+      marginTop: 8,
       padding: "10px 24px",
       background: t.accent,
       color: t.light ? "#fff" : "#000",
@@ -5694,6 +5680,8 @@ function UserSetupModal({
 function ChatPanel({
   room,
   user,
+  authUser,
+  onGoogleLogin,
   t,
   fbReady
 }) {
@@ -5727,12 +5715,17 @@ function ChatPanel({
   const send = async () => {
     const txt = text.trim();
     if (!txt) return;
+    if (!chatUser) {
+      return;
+    }
+    const av = chatUser.avatar;
+    const avDisplay = typeof av === "object" ? av.value : av || user?.avatar || "🧙";
     const msg = {
       id: genId(12),
       roomId: room.id,
-      authorId: user.id,
-      authorName: user.name,
-      authorAvatar: user.avatar,
+      authorId: chatUser.id,
+      authorName: chatUser.name,
+      authorAvatar: avDisplay,
       text: txt,
       timestamp: tsNow(),
       type: "message"
@@ -5747,6 +5740,69 @@ function ChatPanel({
     }
   };
   const myRole = room.members?.find(m => m.id === user.id)?.role || "observer";
+  const [showRules, setShowRules] = useState(false);
+  const [anonName, setAnonName] = useState(user?.name || "");
+  const [chatUser, setChatUser] = useState(authUser ? {
+    id: authUser.uid,
+    name: authUser.displayName,
+    avatar: authUser.photoURL ? {
+      type: "google",
+      value: authUser.photoURL
+    } : user?.avatar || AVATARS[0]
+  } : null);
+
+  // Sync authUser into chatUser
+  useEffect(() => {
+    if (authUser) setChatUser({
+      id: authUser.uid,
+      name: authUser.displayName,
+      avatar: authUser.photoURL ? {
+        type: "google",
+        value: authUser.photoURL
+      } : user?.avatar || AVATARS[0]
+    });
+  }, [authUser]);
+  const handleAnonEnter = name => {
+    setChatUser({
+      id: user.id || genId(8),
+      name,
+      avatar: user.avatar || AVATARS[0]
+    });
+  };
+  const getAvatarDisplay = av => {
+    if (!av) return "🧙";
+    if (typeof av === "string") return av;
+    if (av.type === "emoji") return av.value;
+    if (av.type === "photo" || av.type === "google") return av.value;
+    return "🧙";
+  };
+  const AvatarImg = ({
+    av,
+    size = 32
+  }) => {
+    const d = getAvatarDisplay(av);
+    if (typeof d === "string" && (d.startsWith("http") || d.startsWith("data:"))) return /*#__PURE__*/React.createElement("img", {
+      src: d,
+      style: {
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        objectFit: "cover",
+        border: `1px solid ${t.cb}`
+      },
+      alt: ""
+    });
+    return /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: size * 0.6,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: size,
+        height: size
+      }
+    }, d);
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -5754,33 +5810,57 @@ function ChatPanel({
       height: "100%",
       minHeight: 0
     }
+  }, showRules && /*#__PURE__*/React.createElement(ChatRulesModal, {
+    t: t,
+    onClose: () => setShowRules(false)
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 10,
+      flexWrap: "wrap"
+    }
   }, !fbReady && /*#__PURE__*/React.createElement("div", {
     style: {
+      flex: 1,
       background: "rgba(245,158,11,0.12)",
       border: "1px solid rgba(245,158,11,0.3)",
       borderRadius: 10,
-      padding: "8px 14px",
-      marginBottom: 10,
-      fontSize: 12,
-      color: "#f59e0b",
-      display: "flex",
-      alignItems: "center",
-      gap: 8
+      padding: "6px 12px",
+      fontSize: 11,
+      color: "#f59e0b"
     }
-  }, "\u26A0\uFE0F Modo offline \u2014 mensagens salvas s\xF3 neste dispositivo. Ative o Firebase para chat em grupo real."), fbReady && /*#__PURE__*/React.createElement("div", {
+  }, "\u26A0\uFE0F Offline \u2014 ative Firebase para chat em grupo."), fbReady && /*#__PURE__*/React.createElement("div", {
     style: {
+      flex: 1,
       background: "rgba(34,197,94,0.1)",
       border: "1px solid rgba(34,197,94,0.25)",
       borderRadius: 10,
-      padding: "8px 14px",
-      marginBottom: 10,
-      fontSize: 12,
-      color: "#22c55e",
-      display: "flex",
-      alignItems: "center",
-      gap: 8
+      padding: "6px 12px",
+      fontSize: 11,
+      color: "#22c55e"
     }
-  }, "\uD83D\uDFE2 Firebase conectado \u2014 hist\xF3rico permanente, sincronizado para todos os membros."), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDFE2 Firebase \u2014 hist\xF3rico permanente para todos os membros."), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowRules(true),
+    style: {
+      padding: "5px 10px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 8,
+      cursor: "pointer",
+      fontSize: 11,
+      fontFamily: t.fB,
+      whiteSpace: "nowrap"
+    }
+  }, "\uD83D\uDCCB Regras")), !chatUser && /*#__PURE__*/React.createElement(ChatLoginPrompt, {
+    authUser: authUser,
+    localUser: user,
+    onSetNickname: handleAnonEnter,
+    onGoogleLogin: onGoogleLogin,
+    t: t
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       overflowY: "auto",
@@ -5821,6 +5901,7 @@ function ChatPanel({
         width: 32,
         height: 32,
         borderRadius: "50%",
+        overflow: "hidden",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -5829,7 +5910,15 @@ function ChatPanel({
         border: `1px solid ${t.cb}`,
         flexShrink: 0
       }
-    }, msg.authorAvatar || "🧙"), !isMe && !showAvatar && /*#__PURE__*/React.createElement("div", {
+    }, typeof (msg.authorAvatar || "🧙") === "string" && ((msg.authorAvatar || "").startsWith("http") || (msg.authorAvatar || "").startsWith("data:")) ? /*#__PURE__*/React.createElement("img", {
+      src: msg.authorAvatar,
+      style: {
+        width: "100%",
+        height: "100%",
+        objectFit: "cover"
+      },
+      alt: ""
+    }) : /*#__PURE__*/React.createElement("span", null, msg.authorAvatar || "🧙")), !isMe && !showAvatar && /*#__PURE__*/React.createElement("div", {
       style: {
         width: 40,
         flexShrink: 0
@@ -5865,7 +5954,7 @@ function ChatPanel({
     }, fmtTime(msg.timestamp))));
   }), /*#__PURE__*/React.createElement("div", {
     ref: endRef
-  })), (myRole === "creator" || myRole === "reviewer" || myRole === "contributor") && /*#__PURE__*/React.createElement("div", {
+  })), chatUser && (myRole === "creator" || myRole === "reviewer" || myRole === "contributor") && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -7134,6 +7223,7 @@ function RoomSettingsPanel({
 function RoomDashboard({
   room,
   user,
+  authUser,
   rooms,
   setRooms,
   dicts,
@@ -7307,6 +7397,8 @@ function RoomDashboard({
   }), activeTab === "chat" && /*#__PURE__*/React.createElement(ChatPanel, {
     room: room,
     user: user,
+    authUser: authUser,
+    onGoogleLogin: () => authBridge.signInWithGoogle().catch(e => console.warn(e)),
     t: t,
     fbReady: fbReady
   }), activeTab === "members" && /*#__PURE__*/React.createElement(MembersPanel, {
@@ -7329,6 +7421,7 @@ function RoomDashboard({
 function RoomsSection({
   dicts,
   user,
+  authUser,
   setUser,
   onAddToDict,
   t,
@@ -7365,6 +7458,7 @@ function RoomsSection({
       }
     }, "Para participar de salas, configure seu perfil primeiro."), /*#__PURE__*/React.createElement(UserSetupModal, {
       user: user,
+      authUser: authUser,
       onSave: u => {
         setUser(u);
         saveLocalUser(u);
@@ -7492,6 +7586,7 @@ function RoomsSection({
     }), "Voltar \xE0s Salas"), /*#__PURE__*/React.createElement(RoomDashboard, {
       room: room,
       user: user,
+      authUser: authUser,
       rooms: rooms,
       setRooms: r => {
         setRooms(r);
@@ -9359,7 +9454,680 @@ function AboutPage({
   }, "Verbarium PRO \xB7 v1.0.0 \xB7 Feito com \uD83D\uDC9C no Brasil"));
 }
 
-// ── SETTINGS SECTION ──────────────────────────────────────────────────────────
+// ── FIREBASE STORAGE SYNC ─────────────────────────────────────────────────────
+async function uploadBackupToStorage(uid, dicts, study) {
+  try {
+    if (!window.firebase?.storage) return false;
+    const storage = firebase.storage();
+    const ref = storage.ref(`users/${uid}/backup.json`);
+    const data = JSON.stringify({
+      dicts: dicts.map(d => ({
+        ...d,
+        entries: d.entries.map(e => ({
+          ...e,
+          audio: null
+        }))
+      })),
+      study,
+      exportedAt: new Date().toISOString()
+    });
+    const blob = new Blob([data], {
+      type: 'application/json'
+    });
+    await ref.put(blob);
+    return true;
+  } catch (e) {
+    console.warn("[Storage]", e);
+    return false;
+  }
+}
+async function downloadBackupFromStorage(uid) {
+  try {
+    if (!window.firebase?.storage) return null;
+    const storage = firebase.storage();
+    const ref = storage.ref(`users/${uid}/backup.json`);
+    const url = await ref.getDownloadURL();
+    const resp = await fetch(url);
+    return await resp.json();
+  } catch (e) {
+    console.warn("[Storage] No backup found:", e);
+    return null;
+  }
+}
+function loadFirebaseStorage(cb) {
+  if (window.firebase?.storage) {
+    cb();
+    return;
+  }
+  const s = document.createElement("script");
+  s.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js";
+  s.onload = cb;
+  document.head.appendChild(s);
+}
+
+// ── DRIVE SYNC PANEL ──────────────────────────────────────────────────────────
+function DriveSyncPanel({
+  authUser,
+  dicts,
+  study,
+  onRestored,
+  t,
+  notify
+}) {
+  const [syncing, setSyncing] = React.useState(false);
+  const [lastSync, setLastSync] = React.useState(() => localStorage.getItem("vb_last_sync") || null);
+  const [hasBackup, setHasBackup] = React.useState(false);
+  React.useEffect(() => {
+    if (authUser) checkBackup();
+  }, [authUser]);
+  const checkBackup = async () => {
+    loadFirebaseStorage(async () => {
+      const bk = await downloadBackupFromStorage(authUser.uid);
+      setHasBackup(!!bk);
+    });
+  };
+  const doBackup = () => {
+    if (!authUser) {
+      notify("Faça login para usar o backup na nuvem.", "err");
+      return;
+    }
+    setSyncing(true);
+    loadFirebaseStorage(async () => {
+      const ok = await uploadBackupToStorage(authUser.uid, dicts, study);
+      if (ok) {
+        const ts = new Date().toLocaleString("pt-BR");
+        localStorage.setItem("vb_last_sync", ts);
+        setLastSync(ts);
+        notify("✅ Backup salvo na nuvem Firebase!");
+        setHasBackup(true);
+      } else notify("Erro ao salvar backup. Verifique se Firebase Storage está ativado.", "err");
+      setSyncing(false);
+    });
+  };
+  const doRestore = () => {
+    if (!authUser) {
+      notify("Faça login para restaurar backup.", "err");
+      return;
+    }
+    setSyncing(true);
+    loadFirebaseStorage(async () => {
+      const bk = await downloadBackupFromStorage(authUser.uid);
+      if (bk) {
+        onRestored(bk);
+        notify("✅ Dados restaurados do backup na nuvem!");
+      } else notify("Nenhum backup encontrado na nuvem.", "info");
+      setSyncing(false);
+    });
+  };
+  const bs = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 16px",
+    borderRadius: 9,
+    cursor: "pointer",
+    fontFamily: t.fB,
+    fontSize: 13,
+    border: "none",
+    transition: "all 0.18s",
+    marginRight: 8,
+    marginBottom: 8
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 20,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 10,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, "\u2601\uFE0F BACKUP NA NUVEM (Firebase Storage)", authUser && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      background: "rgba(34,197,94,0.15)",
+      color: "#22c55e",
+      padding: "2px 8px",
+      borderRadius: 20
+    }
+  }, "\u2713 logado")), !authUser ? /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      lineHeight: 1.6
+    }
+  }, "Fa\xE7a login com Google para ativar o backup autom\xE1tico dos seus dicion\xE1rios na nuvem Firebase. Os \xE1udios gravados ficam no dispositivo por limita\xE7\xE3o de tamanho.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      lineHeight: 1.6,
+      marginBottom: 12
+    }
+  }, "Seus dicion\xE1rios e progresso s\xE3o salvos no Firebase Storage. Acesse de qualquer dispositivo fazendo login com a mesma conta Google.", /*#__PURE__*/React.createElement("br", null), lastSync && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#22c55e"
+    }
+  }, "\u2713 \xDAltimo backup: ", lastSync)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
+    style: {
+      ...bs,
+      background: t.accent,
+      color: t.light ? "#fff" : "#000"
+    },
+    onClick: doBackup,
+    disabled: syncing
+  }, syncing ? "⏳ Salvando..." : "☁️ Salvar Backup Agora"), hasBackup && /*#__PURE__*/React.createElement("button", {
+    style: {
+      ...bs,
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`
+    },
+    onClick: doRestore,
+    disabled: syncing
+  }, "\u2B07\uFE0F Restaurar do Backup")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      fontSize: 11,
+      color: t.muted,
+      lineHeight: 1.6
+    }
+  }, "\uD83D\uDCA1 O app tamb\xE9m sincroniza automaticamente a cada mudan\xE7a quando online.", /*#__PURE__*/React.createElement("br", null), "\u26A0\uFE0F Para ativar o Firebase Storage: console.firebase.google.com \u2192 Storage \u2192 Come\xE7ar.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      paddingTop: 12,
+      borderTop: `1px solid ${t.cb}40`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginBottom: 8
+    }
+  }, "\uD83D\uDD17 ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "Google Drive (alternativa manual):"), " Exporte o arquivo .confor e salve no Drive. Para restaurar, importe o .confor em outro dispositivo \u2014 seus dados de estudo s\xE3o preservados."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("a", {
+    href: "https://drive.google.com",
+    target: "_blank",
+    rel: "noopener",
+    style: {
+      ...bs,
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      textDecoration: "none",
+      fontSize: 12
+    }
+  }, "Abrir Google Drive"))));
+}
+
+// ── CHAT RULES ────────────────────────────────────────────────────────────────
+const CHAT_RULES = ["💬 Mantenha as conversas relacionadas à conlang da sala.", "🤝 Seja respeitoso com todos os membros.", "📖 Para sugerir palavras, use a aba Contribuições.", "🎯 Discuta fonologia, gramática e construção linguística.", "🚫 Sem spam, links suspeitos ou conteúdo ofensivo.", "✅ Ajude quem tiver dúvidas sobre a língua!"];
+function ChatRulesModal({
+  t,
+  onClose
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.6)",
+      backdropFilter: "blur(6px)",
+      zIndex: 400,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20
+    },
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.light ? "#faf4e8" : "#12101c",
+      border: `1px solid ${t.cb}`,
+      borderRadius: 18,
+      padding: 28,
+      maxWidth: 420,
+      width: "100%",
+      animation: "slideUp 0.2s"
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 16,
+      color: t.accent,
+      marginBottom: 16
+    }
+  }, "\uD83D\uDCCB Regras do Chat"), CHAT_RULES.map((r, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontSize: 14,
+      color: t.text,
+      padding: "8px 0",
+      borderBottom: i < CHAT_RULES.length - 1 ? `1px solid ${t.cb}40` : "",
+      lineHeight: 1.5
+    }
+  }, r)), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    style: {
+      marginTop: 20,
+      width: "100%",
+      padding: "10px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "Entendido!")));
+}
+
+// ── ANONYMOUS LOGIN FOR CHAT ──────────────────────────────────────────────────
+function ChatLoginPrompt({
+  authUser,
+  localUser,
+  onSetNickname,
+  onGoogleLogin,
+  t
+}) {
+  const [nick, setNick] = React.useState(localUser?.name || "");
+  const [mode, setMode] = React.useState(null); // null | anon | google
+
+  if (authUser) return null; // Already logged in
+
+  if (mode === "anon") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 12,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDC64 ENTRAR COMO AN\xD4NIMO"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: nick,
+    onChange: e => setNick(e.target.value),
+    onKeyDown: e => e.key === "Enter" && nick.trim() && onSetNickname(nick.trim()),
+    placeholder: "Seu apelido ou nome...",
+    maxLength: 30,
+    style: {
+      flex: 1,
+      background: t.inp,
+      border: `1px solid ${t.cb}`,
+      color: t.text,
+      padding: "8px 12px",
+      borderRadius: 9,
+      fontFamily: t.fB,
+      fontSize: 14,
+      outline: "none"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => nick.trim() && onSetNickname(nick.trim()),
+    style: {
+      padding: "8px 16px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "Entrar")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 6
+    }
+  }, "\uD83D\uDCA1 No modo an\xF4nimo o chat fica salvo s\xF3 nesta sess\xE3o."), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMode(null),
+    style: {
+      marginTop: 6,
+      background: "none",
+      border: "none",
+      color: t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, "\u2190 Voltar"));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid rgba(245,158,11,0.3)`,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "#f59e0b",
+      marginBottom: 10,
+      fontFamily: t.fD
+    }
+  }, "\uD83D\uDCAC Para participar do chat:"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onGoogleLogin,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "8px 16px",
+      background: "#fff",
+      color: "#333",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 48 48"
+  }, /*#__PURE__*/React.createElement("path", {
+    fill: "#EA4335",
+    d: "M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#4285F4",
+    d: "M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#FBBC05",
+    d: "M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#34A853",
+    d: "M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+  })), "Entrar com Google"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMode("anon"),
+    style: {
+      padding: "8px 14px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDC64 Entrar como An\xF4nimo")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 8,
+      lineHeight: 1.6
+    }
+  }, "\uD83D\uDD10 Login com Google: hist\xF3rico permanente, avatar autom\xE1tico e acesso a todas as fun\xE7\xF5es.", /*#__PURE__*/React.createElement("br", null), "\uD83D\uDC64 An\xF4nimo: apenas o apelido, sem salvar hist\xF3rico na nuvem."));
+}
+
+// ── AVATAR PICKER WITH PHOTO ───────────────────────────────────────────────────
+function AvatarPicker({
+  current,
+  googlePhoto,
+  onSave,
+  t
+}) {
+  const [tab, setTab] = React.useState("emoji");
+  const [emoji, setEmoji] = React.useState(current || AVATARS[0]);
+  const [photo, setPhoto] = React.useState(null);
+  const fileRef = React.useRef();
+  const handleFile = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setPhoto(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+  const save = () => {
+    if (tab === "emoji") onSave({
+      type: "emoji",
+      value: emoji
+    });else if (tab === "photo") onSave({
+      type: "photo",
+      value: photo
+    });else if (tab === "google") onSave({
+      type: "google",
+      value: googlePhoto
+    });
+  };
+  const tabs = [{
+    id: "emoji",
+    lb: "😊 Emoji"
+  }, {
+    id: "photo",
+    lb: "📷 Foto"
+  }, ...(googlePhoto ? [{
+    id: "google",
+    lb: "🔑 Google"
+  }] : [])];
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 14
+    }
+  }, tabs.map(tb => /*#__PURE__*/React.createElement("button", {
+    key: tb.id,
+    onClick: () => setTab(tb.id),
+    style: {
+      padding: "5px 12px",
+      borderRadius: 8,
+      border: `1px solid ${tab === tb.id ? t.accent : t.cb}`,
+      background: tab === tb.id ? t.ag : "transparent",
+      color: tab === tb.id ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, tb.lb))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 56,
+      height: 56,
+      borderRadius: "50%",
+      border: `2px solid ${t.accent}`,
+      overflow: "hidden",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: t.surf,
+      flexShrink: 0
+    }
+  }, tab === "emoji" && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 30
+    }
+  }, emoji), tab === "photo" && photo && /*#__PURE__*/React.createElement("img", {
+    src: photo,
+    style: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover"
+    },
+    alt: ""
+  }), tab === "photo" && !photo && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 24,
+      color: t.muted
+    }
+  }, "\uD83D\uDCF7"), tab === "google" && googlePhoto && /*#__PURE__*/React.createElement("img", {
+    src: googlePhoto,
+    style: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover"
+    },
+    alt: ""
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted
+    }
+  }, "Preview do seu avatar")), tab === "emoji" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 7,
+      marginBottom: 12
+    }
+  }, AVATARS.map(a => /*#__PURE__*/React.createElement("div", {
+    key: a,
+    onClick: () => setEmoji(a),
+    style: {
+      width: 42,
+      height: 42,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 22,
+      borderRadius: 10,
+      cursor: "pointer",
+      border: `2px solid ${emoji === a ? t.accent : t.cb}`,
+      background: emoji === a ? t.ag : "transparent"
+    }
+  }, a))), tab === "photo" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => fileRef.current?.click(),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "8px 14px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDCC2 Escolher foto..."), /*#__PURE__*/React.createElement("input", {
+    ref: fileRef,
+    type: "file",
+    accept: "image/*",
+    style: {
+      display: "none"
+    },
+    onChange: handleFile
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 6
+    }
+  }, "JPG, PNG ou WebP. Recomendado: foto quadrada.")), tab === "google" && googlePhoto && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      marginBottom: 12
+    }
+  }, "Usando a foto da sua conta Google automaticamente."), /*#__PURE__*/React.createElement("button", {
+    onClick: save,
+    style: {
+      padding: "8px 20px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "Salvar Avatar"));
+}
+// SETTINGS SECTION --───────────────────────────────────────────────────────
+function LoginNotice({
+  fbReady,
+  authUser,
+  onLogin,
+  t
+}) {
+  if (!fbReady || authUser) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(180,140,255,0.06)",
+      border: `1px solid rgba(180,140,255,0.2)`,
+      borderRadius: 10,
+      padding: "10px 14px",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16
+    }
+  }, "\uD83D\uDD11"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      flex: 1
+    }
+  }, "Fa\xE7a login para sincronizar na nuvem, participar de salas e ter progresso salvo em todos os dispositivos."), /*#__PURE__*/React.createElement("button", {
+    onClick: onLogin,
+    style: {
+      padding: "5px 14px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12,
+      fontWeight: 600,
+      whiteSpace: "nowrap"
+    }
+  }, "Entrar"));
+}
 function SettSection({
   dict,
   theme,
@@ -9683,17 +10451,24 @@ function SettSection({
     style: box
   }, /*#__PURE__*/React.createElement("div", {
     style: hd
-  }, "\uD83D\uDCBE ARMAZENAMENTO"), /*#__PURE__*/React.createElement("p", {
+  }, "\uD83D\uDCBE ARMAZENAMENTO LOCAL"), /*#__PURE__*/React.createElement("p", {
     style: {
       color: t.muted,
       fontSize: 13,
       lineHeight: 1.7
     }
-  }, "\u2705 Todos os dados salvos automaticamente. App funciona ", /*#__PURE__*/React.createElement("strong", {
+  }, "\u2705 Todos os dados salvos automaticamente no dispositivo. App funciona ", /*#__PURE__*/React.createElement("strong", {
     style: {
       color: t.text
     }
-  }, "100% offline."))), /*#__PURE__*/React.createElement(FirebaseSettingsBlock, {
+  }, "100% offline."))), /*#__PURE__*/React.createElement(DriveSyncPanel, {
+    authUser: authUser,
+    dicts: dicts,
+    study: study,
+    onRestored: onRestored,
+    t: t,
+    notify: notify
+  }), /*#__PURE__*/React.createElement(FirebaseSettingsBlock, {
     t: t,
     notify: notify
   }));
@@ -11242,6 +12017,7 @@ function Verbarium() {
   }, "\u2B50")))), tab === "salas" && /*#__PURE__*/React.createElement(RoomsSection, {
     dicts: dicts,
     user: localUser,
+    authUser: authUser,
     setUser: u => {
       setLocalUser(u);
       saveLocalUser(u);
@@ -11264,7 +12040,18 @@ function Verbarium() {
     notify: notify,
     customThemeCfg: customThemeCfg,
     setCustomThemeCfg: setCustomThemeCfg,
-    fbReady: fbReady
+    fbReady: fbReady,
+    authUser: authUser,
+    dicts: dicts,
+    study: study,
+    onRestored: bk => {
+      setDicts(bk.dicts);
+      if (bk.study) setStudy(s => ({
+        ...s,
+        ...bk.study
+      }));
+      notify("Dados restaurados! ✨");
+    }
   }))), /*#__PURE__*/React.createElement("div", {
     className: "bnav"
   }, BNAV.map(item => /*#__PURE__*/React.createElement("div", {
