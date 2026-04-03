@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0a0a0f"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Verbarium"/>
+  <meta name="description" content="Verbarium PRO — O dicionário definitivo para criadores de línguas construídas"/>
+  <title>Verbarium PRO</title>
+
+  <!-- Google Fonts -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display+SC:wght@400;700&family=EB+Garamond:ital,wght@0,400;1,400&family=Lora:ital,wght@0,400;1,400&family=Josefin+Sans:wght@300;400;600&family=Spectral:ital,wght@0,400;1,400&display=swap" rel="stylesheet"/>
+
+  <!-- React 18 -->
+
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+  <!-- SheetJS (XLSX) -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Babel Standalone (compila JSX no navegador) -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.3/babel.min.js"></script>
+
+  <style>
+    html, body, #root { margin:0; padding:0; height:100%; overflow:hidden; }
+    body { background:#0a0a0f; }
+    #splash {
+      position:fixed; inset:0; background:#0a0a0f;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      z-index:9999; transition:opacity 0.5s;
+    }
+    #splash h1 {
+      font-family:'Cinzel Decorative', cursive; font-size:32px;
+      color:#b48cff; text-shadow:0 0 30px rgba(180,140,255,0.5);
+      margin-bottom:8px; letter-spacing:1px;
+    }
+    #splash p { color:#8a7aaa; font-family:Georgia,serif; font-size:14px; margin-bottom:32px; }
+    #splash-bar {
+      width:200px; height:4px; background:rgba(180,140,255,0.15); border-radius:99px; overflow:hidden;
+    }
+    #splash-fill {
+      height:100%; width:0%; background:linear-gradient(90deg,#6040ff,#b48cff);
+      border-radius:99px; transition:width 0.1s; box-shadow:0 0 10px rgba(180,140,255,0.5);
+      animation:loadBar 3s ease-in-out forwards;
+    }
+    @keyframes loadBar { 0%{width:0%} 60%{width:75%} 90%{width:92%} 100%{width:100%} }
+  </style>
+
+</head>
+<body>
+
+  <!-- Splash screen while Babel compiles -->
+
+  <div id="splash">
+    <h1>Verbarium</h1>
+    <p>Carregando seu léxico…</p>
+    <div id="splash-bar"><div id="splash-fill"></div></div>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    // Expose React hooks as globals (replaces the ES module import)
+    const { useState, useEffect, useRef, useMemo } = React;
+
+
+// ── THEMES ────────────────────────────────────────────────────────────────────
+const THEMES = {
+  obsidian: { name:"Obsidian Rune", icon:"🪨", bg:"linear-gradient(135deg,#0a0a0f,#12101a,#0d0d15)", card:"rgba(255,255,255,0.04)", cb:"rgba(180,140,255,0.15)", accent:"#b48cff", ag:"rgba(180,140,255,0.25)", text:"#e8e0ff", muted:"#8a7aaa", surf:"rgba(255,255,255,0.06)", tag:"rgba(180,140,255,0.2)", tagT:"#c9aaff", hdr:"rgba(10,8,20,0.95)", inp:"rgba(255,255,255,0.05)", fB:"'Crimson Pro',serif", fD:"'Cinzel Decorative',cursive", light:false, sp:"" },
+  solaris:  { name:"Solaris Gold",  icon:"☀️", bg:"linear-gradient(135deg,#1a1200,#2a1f00,#1f1800)", card:"rgba(255,220,80,0.06)", cb:"rgba(255,200,60,0.2)", accent:"#ffd040", ag:"rgba(255,208,64,0.3)", text:"#fff5cc", muted:"#a89050", surf:"rgba(255,200,60,0.08)", tag:"rgba(255,200,60,0.2)", tagT:"#ffd060", hdr:"rgba(20,15,0,0.95)", inp:"rgba(255,200,60,0.07)", fB:"'Cormorant Garamond',serif", fD:"'Playfair Display SC',serif", light:false, sp:"" },
+  aether:   { name:"Aether Mist",   icon:"🌊", bg:"linear-gradient(160deg,#001a2c,#002a3a,#001520)", card:"rgba(80,200,255,0.05)", cb:"rgba(80,200,255,0.15)", accent:"#50c8ff", ag:"rgba(80,200,255,0.25)", text:"#d0f0ff", muted:"#5a8fa0", surf:"rgba(80,200,255,0.07)", tag:"rgba(80,200,255,0.2)", tagT:"#80d8ff", hdr:"rgba(0,18,30,0.95)", inp:"rgba(80,200,255,0.06)", fB:"'EB Garamond',serif", fD:"'Josefin Sans',sans-serif", light:false, sp:"" },
+  nautica:  { name:"Nautica Royal", icon:"⚓", bg:"linear-gradient(160deg,#f5f9ff,#edf3ff,#f0f6ff)", card:"rgba(20,50,140,0.05)", cb:"rgba(20,50,140,0.14)", accent:"#1a3a8a", ag:"rgba(26,58,138,0.18)", text:"#0a1540", muted:"#5a6a9a", surf:"rgba(20,50,140,0.07)", tag:"rgba(255,215,0,0.25)", tagT:"#7a5c00", hdr:"rgba(245,249,255,0.97)", inp:"rgba(20,50,140,0.06)", fB:"'EB Garamond',serif", fD:"'Cinzel',serif", light:true, sp:"" },
+  aurora:   { name:"Aurora Borealis",icon:"🌌", bg:"linear-gradient(160deg,#050010,#0a0520,#001520,#051000)", card:"rgba(255,255,255,0.04)", cb:"rgba(180,255,200,0.15)", accent:"#a0ffcc", ag:"rgba(160,255,200,0.25)", text:"#e0fff0", muted:"#507060", surf:"rgba(160,255,200,0.06)", tag:"rgba(160,255,200,0.2)", tagT:"#b0ffdd", hdr:"rgba(5,0,15,0.95)", inp:"rgba(160,255,200,0.05)", fB:"'Lora',serif", fD:"'Cinzel',serif", light:false, sp:"aurora" },
+  cosmic:   { name:"Cosmic Gradient",icon:"🔮", bg:"linear-gradient(135deg,#1a0030,#0a0050,#001a40,#001530,#1a0020)", card:"rgba(255,255,255,0.04)", cb:"rgba(200,150,255,0.15)", accent:"#d080ff", ag:"rgba(200,120,255,0.3)", text:"#f0e0ff", muted:"#806090", surf:"rgba(200,120,255,0.07)", tag:"rgba(200,120,255,0.18)", tagT:"#e0a0ff", hdr:"rgba(15,0,35,0.95)", inp:"rgba(200,120,255,0.06)", fB:"'Crimson Pro',serif", fD:"'Josefin Sans',sans-serif", light:false, sp:"cosmic" },
+  ivory:    { name:"Ivory Scholar", icon:"📜", bg:"linear-gradient(160deg,#faf6ee,#f5efdf,#ede6d4)", card:"rgba(100,70,20,0.05)", cb:"rgba(100,70,20,0.15)", accent:"#7a4a10", ag:"rgba(120,80,20,0.15)", text:"#2a1a00", muted:"#8a7050", surf:"rgba(100,70,20,0.07)", tag:"rgba(120,80,20,0.12)", tagT:"#5a3a00", hdr:"rgba(240,232,215,0.97)", inp:"rgba(100,70,20,0.05)", fB:"'Cormorant Garamond',serif", fD:"'Cinzel Decorative',cursive", light:true, sp:"" },
+  eclipse:  { name:"Eclipse Verde", icon:"🌑", bg:"linear-gradient(135deg,#080c06,#0e1508,#0a1c08,#141a06)", card:"rgba(180,230,60,0.05)", cb:"rgba(180,230,60,0.17)", accent:"#d4e840", ag:"rgba(200,230,60,0.28)", text:"#efffcc", muted:"#7a9050", surf:"rgba(180,220,60,0.07)", tag:"rgba(120,220,60,0.2)", tagT:"#a8dd60", hdr:"rgba(6,9,4,0.97)", inp:"rgba(180,220,60,0.06)", fB:"'Spectral',serif", fD:"'Playfair Display SC',serif", light:false, sp:"eclipse" },
+};
+
+// ── I18N ──────────────────────────────────────────────────────────────────────
+const I18N = {
+  "pt-BR":{ flag:"🇧🇷", name:"Português (BR)", dir:"ltr", nav:{home:"Início",dict:"Dicionário",phrases:"Fraseário",grammar:"Gramática",phonology:"Fonologia",lessons:"Lições",games:"Jogos",ach:"Conquistas",settings:"Configurações"}, btn:{add:"Nova Palavra",phrase:"Nova Frase",save:"Salvar",cancel:"Cancelar",edit:"Editar",del:"Excluir",listen:"Ouvir",rec:"Gravar",stop:"Parar",back:"Voltar",study:"Estudar",done:"Concluída",newLang:"Novo Idioma"}, game:{flash:"Flashcards",match:"Associar Palavras",findT:"Achar Tradução",findW:"Achar Palavra",mixed:"Letras Misturadas",cross:"Palavras Cruzadas"}, ui:{search:"Buscar palavras...",level:"Nível",streak:"dias",allD:"Todos",thisD:"Este",theme:"Tema",lang:"Idioma do App",xpNext:"para o próximo nível",mem:"Memorização",words:"Palavras",langs:"Idiomas",lessons:"Lições"} },
+  "en":   { flag:"🇺🇸", name:"English", dir:"ltr", nav:{home:"Home",dict:"Dictionary",phrases:"Phrasebook",grammar:"Grammar",phonology:"Phonology",lessons:"Lessons",games:"Games",ach:"Achievements",settings:"Settings"}, btn:{add:"New Word",phrase:"New Phrase",save:"Save",cancel:"Cancel",edit:"Edit",del:"Delete",listen:"Listen",rec:"Record",stop:"Stop",back:"Back",study:"Study",done:"Done",newLang:"New Language"}, game:{flash:"Flashcards",match:"Match Words",findT:"Find Translation",findW:"Find Word",mixed:"Mixed Letters",cross:"Crossword"}, ui:{search:"Search words...",level:"Level",streak:"days",allD:"All dics",thisD:"This dic",theme:"Theme",lang:"App Language",xpNext:"to next level",mem:"Memorization",words:"Words",langs:"Languages",lessons:"Lessons"} },
+  "es":   { flag:"🇪🇸", name:"Español", dir:"ltr", nav:{home:"Inicio",dict:"Diccionario",phrases:"Fraseario",grammar:"Gramática",phonology:"Fonología",lessons:"Lecciones",games:"Juegos",ach:"Logros",settings:"Ajustes"}, btn:{add:"Nueva Palabra",phrase:"Nueva Frase",save:"Guardar",cancel:"Cancelar",edit:"Editar",del:"Eliminar",listen:"Escuchar",rec:"Grabar",stop:"Parar",back:"Volver",study:"Estudiar",done:"Completada",newLang:"Nuevo Idioma"}, game:{flash:"Tarjetas",match:"Emparejar",findT:"Hallar Trad.",findW:"Hallar Palabra",mixed:"Letras Mezcladas",cross:"Crucigrama"}, ui:{search:"Buscar...",level:"Nivel",streak:"días",allD:"Todos",thisD:"Este",theme:"Tema",lang:"Idioma",xpNext:"para el siguiente nivel",mem:"Memorización",words:"Palabras",langs:"Idiomas",lessons:"Lecciones"} },
+  "fr":   { flag:"🇫🇷", name:"Français", dir:"ltr", nav:{home:"Accueil",dict:"Dictionnaire",phrases:"Phrasebook",grammar:"Grammaire",phonology:"Phonologie",lessons:"Leçons",games:"Jeux",ach:"Succès",settings:"Paramètres"}, btn:{add:"Nouveau Mot",phrase:"Nouvelle Phrase",save:"Sauvegarder",cancel:"Annuler",edit:"Modifier",del:"Supprimer",listen:"Écouter",rec:"Enregistrer",stop:"Arrêter",back:"Retour",study:"Étudier",done:"Terminée",newLang:"Nouvelle Langue"}, game:{flash:"Cartes Mémoire",match:"Associer Mots",findT:"Trouver Trad.",findW:"Trouver Mot",mixed:"Lettres Mélangées",cross:"Mots Croisés"}, ui:{search:"Rechercher...",level:"Niveau",streak:"jours",allD:"Tous",thisD:"Ce dic",theme:"Thème",lang:"Langue",xpNext:"pour le prochain niveau",mem:"Mémorisation",words:"Mots",langs:"Langues",lessons:"Leçons"} },
+  "zh":   { flag:"🇨🇳", name:"中文", dir:"ltr", nav:{home:"首页",dict:"词典",phrases:"短语集",grammar:"语法",phonology:"音系",lessons:"课程",games:"游戏",ach:"成就",settings:"设置"}, btn:{add:"添加词汇",phrase:"添加短语",save:"保存",cancel:"取消",edit:"编辑",del:"删除",listen:"聆听",rec:"录音",stop:"停止",back:"返回",study:"学习",done:"完成",newLang:"新语言"}, game:{flash:"闪卡",match:"词语配对",findT:"找翻译",findW:"找词汇",mixed:"字母混乱",cross:"填字游戏"}, ui:{search:"搜索词汇...",level:"等级",streak:"天",allD:"全部",thisD:"当前",theme:"主题",lang:"语言",xpNext:"升级所需",mem:"记忆度",words:"词汇",langs:"语言",lessons:"课程"} },
+  "hi":   { flag:"🇮🇳", name:"हिन्दी", dir:"ltr", nav:{home:"होम",dict:"शब्दकोश",phrases:"वाक्यांश",grammar:"व्याकरण",phonology:"ध्वनि",lessons:"पाठ",games:"खेल",ach:"उपलब्धि",settings:"सेटिंग्स"}, btn:{add:"नया शब्द",phrase:"नई वाक्यांश",save:"सहेजें",cancel:"रद्द करें",edit:"संपादित",del:"हटाएं",listen:"सुनें",rec:"रिकॉर्ड",stop:"रोकें",back:"वापस",study:"पढ़ें",done:"पूर्ण",newLang:"नई भाषा"}, game:{flash:"फ्लैशकार्ड",match:"शब्द मिलाएं",findT:"अनुवाद खोजें",findW:"शब्द खोजें",mixed:"मिश्रित अक्षर",cross:"क्रॉसवर्ड"}, ui:{search:"खोजें...",level:"स्तर",streak:"दिन",allD:"सभी",thisD:"यह",theme:"थीम",lang:"भाषा",xpNext:"अगले स्तर के लिए",mem:"याददाश्त",words:"शब्द",langs:"भाषाएं",lessons:"पाठ"} },
+};
+
+// ── WORD CLASSES & IPA ────────────────────────────────────────────────────────
+const WC = ["substantivo","verbo","adjetivo","advérbio","pronome","preposição","conjunção","interjeição","artigo","numeral","partícula","afixo","raiz","outro"];
+const IPA_C = [{l:"Oclusivas",r:["p","b","t","d","ʈ","ɖ","k","g","ʔ"]},{l:"Nasais",r:["m","ɱ","n","ɳ","ɲ","ŋ","ɴ","",""]},{l:"Fricativas",r:["f","v","s","z","ʃ","ʒ","x","ɣ","h"]},{l:"Africadas",r:["tʃ","dʒ","ts","dz","","","","",""]},{l:"Aproxim.",r:["w","ʋ","ɹ","j","ɰ","","","",""]},{l:"Laterais",r:["l","ɭ","ʎ","ʟ","","","","",""]},{l:"Vibrantes",r:["r","ɾ","ʀ","","","","","",""]}];
+const IPA_V = [{l:"Fechadas",r:["i","y","ɨ","ʉ","ɯ","u"]},{l:"Semifech.",r:["e","ø","ɘ","ɵ","ɤ","o"]},{l:"Médias",r:["ɛ","œ","ə","ɜ","ɞ","ɔ"]},{l:"Semiabert.",r:["æ","ɶ","ɐ","","",""]},{l:"Abertas",r:["a","","ä","","ɑ","ɒ"]}];
+
+// ── ESPERANTO DATA (Domínio público — L.L. Zamenhof, 1887) ──────────────────
+const ESPERANTO = {
+  id:"esperanto", name:"Esperanto", author:"L.L. Zamenhof (1887)",
+  description:"A língua internacional planejada criada em 1887. A língua mais falada entre as conlangs — estimados 2 milhões de falantes. Domínio público.",
+  entries:[
+    {id:1,word:"ami",translation:"amar",class:"verbo",pronunciation:"/aˈmi/",etymology:"Do latim amare. Sufixo infinitivo -i.",definition:"Sentir amor ou afeto profundo por alguém ou algo. Verbo regular.",examples:["Mi amas vin. — Eu te amo.","Ni amas la mondon. — Nós amamos o mundo."],tags:["emoções","básico","v1"],roots:["am-","-i"],notes:"Conjugação: amas (pres.), amis (pass.), amos (fut.), amu (subj.), amu! (imp.)",audio:null,image:null,created:"1887-01-01"},
+    {id:2,word:"libro",translation:"livro",class:"substantivo",pronunciation:"/ˈlib.ro/",etymology:"Do latim liber. Sufixo nominal -o.",definition:"Obra escrita ou impressa em páginas encadernadas.",examples:["La libro estas interesa. — O livro é interessante."],tags:["objetos","cultura","básico"],roots:["libr-","-o"],notes:"Plural: libroj. Acus.: libron.",audio:null,image:null,created:"1887-01-01"},
+    {id:3,word:"bela",translation:"belo, bonito",class:"adjetivo",pronunciation:"/ˈbe.la/",etymology:"Do italiano bello. Sufixo adjetival -a.",definition:"De aparência agradável; que apresenta beleza.",examples:["La floro estas bela. — A flor é bela.","Bela tago! — Lindo dia!"],tags:["descrição","básico"],roots:["bel-","-a"],notes:"Superlativo: plej bela. Advérbio: bele.",audio:null,image:null,created:"1887-01-01"},
+    {id:4,word:"lerni",translation:"aprender",class:"verbo",pronunciation:"/ˈler.ni/",etymology:"Do alemão lernen.",definition:"Adquirir conhecimento ou habilidade por meio de estudo ou experiência.",examples:["Mi lernas Esperanton. — Eu aprendo Esperanto.","Lernu! — Aprenda!"],tags:["educação","ação","básico"],roots:["lern-","-i"],notes:"Lernanto = aprendiz. Lernejo = escola.",audio:null,image:null,created:"1887-01-01"},
+    {id:5,word:"mondo",translation:"mundo",class:"substantivo",pronunciation:"/ˈmon.do/",etymology:"Do francês monde / latim mundus.",definition:"A Terra e tudo que nela existe; a totalidade da experiência humana.",examples:["La mondo estas granda. — O mundo é grande.","Ĉio en la mondo. — Tudo no mundo."],tags:["cosmos","filosofia","básico"],roots:["mond-","-o"],notes:"Mondano = mundano. Tutmonde = em todo o mundo.",audio:null,image:null,created:"1887-01-01"},
+    {id:6,word:"lingvo",translation:"língua, idioma",class:"substantivo",pronunciation:"/ˈliŋ.vo/",etymology:"Do latim lingua.",definition:"Sistema de comunicação verbal usado por uma comunidade humana.",examples:["Esperanto estas internacia lingvo. — Esperanto é uma língua internacional."],tags:["linguagem","cultura"],roots:["lingv-","-o"],notes:"Lingvisto = linguista. Lingvistiko = linguística.",audio:null,image:null,created:"1887-01-01"},
+    {id:7,word:"paroli",translation:"falar, conversar",class:"verbo",pronunciation:"/pa.ˈro.li/",etymology:"Do italiano parlare.",definition:"Expressar pensamentos por meio de palavras faladas.",examples:["Ŝi parolas tre bele. — Ela fala muito bem.","Ni parolu! — Vamos conversar!"],tags:["comunicação","ação"],roots:["parol-","-i"],notes:"Parolanto = falante. Parolado = discurso.",audio:null,image:null,created:"1887-01-01"},
+    {id:8,word:"amiko",translation:"amigo",class:"substantivo",pronunciation:"/a.ˈmi.ko/",etymology:"De ami- (amar) + -iko (pessoa associada).",definition:"Pessoa com quem se tem laço de afeto e confiança.",examples:["Li estas mia bona amiko. — Ele é meu bom amigo."],tags:["pessoas","relações","básico"],roots:["am-","-ik-","-o"],notes:"Amikino = amiga. Amikeco = amizade.",audio:null,image:null,created:"1887-01-01"},
+    {id:9,word:"domo",translation:"casa",class:"substantivo",pronunciation:"/ˈdo.mo/",etymology:"Do latim domus.",definition:"Construção destinada à habitação de pessoas.",examples:["Mia domo estas malgranda. — Minha casa é pequena.","Hejmo estas kie la koro estas. — Lar é onde o coração está."],tags:["lugares","objetos","básico"],roots:["dom-","-o"],notes:"Hejmo = lar (sentido afetivo). Dometo = casinha.",audio:null,image:null,created:"1887-01-01"},
+    {id:10,word:"suno",translation:"sol",class:"substantivo",pronunciation:"/ˈsu.no/",etymology:"Do latim sol/solis via *sun-.",definition:"Estrela central do sistema solar; fonte de luz e calor da Terra.",examples:["La suno brilas. — O sol brilha.","Post pluvo venas suno. — Após a chuva vem o sol."],tags:["natureza","cosmos","básico"],roots:["sun-","-o"],notes:"Sunlumo = luz solar. Sunokcidento = pôr do sol.",audio:null,image:null,created:"1887-01-01"},
+    {id:11,word:"luno",translation:"lua",class:"substantivo",pronunciation:"/ˈlu.no/",etymology:"Do latim luna.",definition:"Satélite natural da Terra, visível à noite por reflexo solar.",examples:["La luno estas bela nokte. — A lua é bela à noite."],tags:["natureza","cosmos"],roots:["lun-","-o"],notes:"Plenluno = lua cheia. Novjarluno = lua nova.",audio:null,image:null,created:"1887-01-01"},
+    {id:12,word:"akvo",translation:"água",class:"substantivo",pronunciation:"/ˈak.vo/",etymology:"Do latim aqua.",definition:"Líquido incolor, inodoro e insípido, essencial à vida.",examples:["Mi trinkas akvon. — Eu bebo água.","Akvo estas vivo. — Água é vida."],tags:["natureza","básico","essencial"],roots:["akv-","-o"],notes:"Maro = mar. Rivero = rio. Akva = aquático.",audio:null,image:null,created:"1887-01-01"},
+    {id:13,word:"tempo",translation:"tempo",class:"substantivo",pronunciation:"/ˈtem.po/",etymology:"Do latim tempus.",definition:"Duração, sucessão de instantes; época ou período.",examples:["La tempo pasas. — O tempo passa.","Ĉu vi havas tempon? — Você tem tempo?"],tags:["abstrato","básico"],roots:["temp-","-o"],notes:"Nuntempo = presente. Estonteco = futuro.",audio:null,image:null,created:"1887-01-01"},
+    {id:14,word:"vivo",translation:"vida",class:"substantivo",pronunciation:"/ˈvi.vo/",etymology:"Do latim vivus (vivo).",definition:"Estado de existência ativa dos seres organizados.",examples:["La vivo estas mirinda. — A vida é maravilhosa."],tags:["filosofia","abstrato"],roots:["viv-","-o"],notes:"Vivi = viver. Vivanto = ser vivo.",audio:null,image:null,created:"1887-01-01"},
+    {id:15,word:"vorto",translation:"palavra",class:"substantivo",pronunciation:"/ˈvor.to/",etymology:"Do alemão Wort.",definition:"Unidade mínima de sentido na linguagem; signo linguístico.",examples:["Lernu ĉiutage novan vorton. — Aprenda uma nova palavra todo dia."],tags:["linguagem","básico"],roots:["vort-","-o"],notes:"Vortaro = dicionário. Vortolisto = lista de palavras.",audio:null,image:null,created:"1887-01-01"},
+    {id:16,word:"tago",translation:"dia",class:"substantivo",pronunciation:"/ˈta.go/",etymology:"Origem incerta, possivelmente do italiano giorno via *tag.",definition:"Período de 24 horas; parte iluminada do dia.",examples:["Bonan tagon! — Bom dia!","Ĉiutage mi lernas. — Todo dia eu aprendo."],tags:["tempo","básico","saudações"],roots:["tag-","-o"],notes:"Hieraŭ = ontem. Hodiaŭ = hoje. Morgaŭ = amanhã.",audio:null,image:null,created:"1887-01-01"},
+    {id:17,word:"nokto",translation:"noite",class:"substantivo",pronunciation:"/ˈnok.to/",etymology:"Do latim nox / noctis.",definition:"Período de ausência de luz solar; intervalo entre o pôr e o nascer do sol.",examples:["Bonan nokton! — Boa noite!","La nokto estas silenta. — A noite é silenciosa."],tags:["tempo","básico","saudações"],roots:["nokt-","-o"],notes:"Noktomezo = meia-noite. Nokta = noturno.",audio:null,image:null,created:"1887-01-01"},
+    {id:18,word:"homo",translation:"pessoa, ser humano",class:"substantivo",pronunciation:"/ˈho.mo/",etymology:"Do latim homo.",definition:"Ser humano, independentemente de gênero ou idade.",examples:["Ĉiu homo estas egala. — Todo ser humano é igual."],tags:["pessoas","filosofia","básico"],roots:["hom-","-o"],notes:"Homaro = humanidade. Homeca = humano (adj.).",audio:null,image:null,created:"1887-01-01"},
+    {id:19,word:"bona",translation:"bom, boa",class:"adjetivo",pronunciation:"/ˈbo.na/",etymology:"Do latim bonus.",definition:"De boa qualidade; que apresenta virtudes positivas.",examples:["Bonan matenon! — Bom dia (manhã)!","Li estas bona homo. — Ele é uma boa pessoa."],tags:["descrição","básico","saudações"],roots:["bon-","-a"],notes:"Bonege = excelente. Malbone = mal (adv.).",audio:null,image:null,created:"1887-01-01"},
+    {id:20,word:"nova",translation:"novo, nova",class:"adjetivo",pronunciation:"/ˈno.va/",etymology:"Do latim novus.",definition:"Recente; não existia ou não era conhecido anteriormente.",examples:["Mi havas novan libron. — Eu tenho um livro novo.","Nova tago, nova ebleco. — Novo dia, nova possibilidade."],tags:["descrição","básico"],roots:["nov-","-a"],notes:"Novulo = novato. Renova = renovar.",audio:null,image:null,created:"1887-01-01"},
+    {id:21,word:"dankon",translation:"obrigado",class:"interjeição",pronunciation:"/ˈdan.kon/",etymology:"De danki (agradecer) + acusativo -n.",definition:"Expressão de gratidão e reconhecimento.",examples:["Dankon! — Obrigado!","Dankon multon! — Muito obrigado!"],tags:["saudações","básico","etiqueta"],roots:["dank-","-on"],notes:"Nedankinde = de nada. Danki = agradecer.",audio:null,image:null,created:"1887-01-01"},
+    {id:22,word:"saluton",translation:"olá, saudação",class:"interjeição",pronunciation:"/sa.ˈlu.ton/",etymology:"De saluti (saudar) + acusativo -n.",definition:"Cumprimento usado ao encontrar alguém.",examples:["Saluton! Kiel vi fartas? — Olá! Como vai você?"],tags:["saudações","básico","etiqueta"],roots:["salut-","-on"],notes:"De adiaŭ = até logo. Ĝis revido = até a próxima.",audio:null,image:null,created:"1887-01-01"},
+  ],
+  phrases:[
+    {id:1,phrase:"Saluton! Kiel vi fartas?",translation:"Olá! Como vai você?",context:"informal",audio:null,tags:["saudações","básico"],created:"1887-01-01"},
+    {id:2,phrase:"Mi amas vin.",translation:"Eu te amo.",context:"poético",audio:null,tags:["emoções"],created:"1887-01-01"},
+    {id:3,phrase:"La mondo estas bela.",translation:"O mundo é bonito.",context:"neutro",audio:null,tags:["filosofia","natureza"],created:"1887-01-01"},
+    {id:4,phrase:"Ĉu vi parolas Esperanton?",translation:"Você fala Esperanto?",context:"formal",audio:null,tags:["linguagem"],created:"1887-01-01"},
+    {id:5,phrase:"Dankon multon! Nedankinde.",translation:"Muito obrigado! — De nada.",context:"informal",audio:null,tags:["etiqueta","básico"],created:"1887-01-01"},
+    {id:6,phrase:"Post pluvo venas suno.",translation:"Após a chuva vem o sol.",context:"poético",audio:null,tags:["provérbio","natureza"],created:"1887-01-01"},
+  ],
+  lessons:[
+    {id:1,title:"Lição 1 — Saudações e Primeiros Passos",description:"Aprenda a cumprimentar em Esperanto e as expressões mais básicas do dia a dia.",entryIds:[16,17,19,21,22],content:"Esperanto foi projetado para ser simples de aprender. Todas as palavras são pronunciadas exatamente como se escrevem. Nesta lição, você aprenderá as saudações essenciais:\n\n• Bonan matenon! = Bom dia!\n• Bonan posttagmezon! = Boa tarde!\n• Bonan nokton! = Boa noite!\n• Saluton! = Olá!\n• Ĝis revido! = Até logo!\n• Dankon! = Obrigado!\n• Nedankinde! = De nada!\n\nLembre: todo substantivo termina em -o, todo adjetivo em -a.",created:"2024-01-01"},
+    {id:2,title:"Lição 2 — Natureza e Cosmos",description:"Vocabulário relacionado à natureza, o céu, e os elementos do mundo natural.",entryIds:[10,11,12,13,5],content:"O Esperanto usa raízes latinas, gregas e germânicas. Nesta lição exploramos o vocabulário da natureza:\n\n• suno, luno, stelo (estrela), nuvoj (nuvens)\n• akvo, tero (terra), aero (ar), fajro (fogo)\n• La suno brilas = O sol brilha\n• La luno estas plena = A lua está cheia\n• Akvo estas vivo = Água é vida\n\nDica: Adicione -ejo para fazer lugar: akvo → akvejo (lugar de água = piscina, fonte).",created:"2024-01-01"},
+    {id:3,title:"Lição 3 — Gramática Essencial",description:"As regras fundamentais do Esperanto: sufixos, conjugação verbal e estrutura da frase.",entryIds:[1,4,7,6,15],content:"O Esperanto tem apenas 16 regras gramaticais básicas, sem exceções:\n\n📌 SUFIXOS NOMINAIS\n-o = substantivo (libro = livro)\n-a = adjetivo (bona = bom)\n-e = advérbio (bone = bem)\n-i = infinitivo verbal (ami = amar)\n\n📌 CONJUGAÇÃO VERBAL\n-as = presente (mi amas = eu amo)\n-is = passado (mi amis = eu amei)\n-os = futuro (mi amos = eu amarei)\n-us = condicional (mi amus = eu amaria)\n-u = subjuntivo/imperativo (amu! = ame!)\n\n📌 PLURAL e ACUSATIVO\nPlural: + -j (libroj = livros)\nAcusativo (objeto): + -n (mi vidas libron = eu vejo um livro)",created:"2024-01-01"},
+  ],
+  grammar:{
+    morphology:"Esperanto é uma língua aglutinante com morfologia completamente regular.\n\nSUFIXOS FUNDAMENTAIS:\n• Substantivos: -o (homo = pessoa, libro = livro)\n• Adjetivos: -a (bona = bom, nova = novo)\n• Advérbios: -e (bone = bem, nove = novamente)\n• Verbos infinitivo: -i (ami = amar, lerni = aprender)\n\nCONJUGAÇÃO VERBAL (invariável para todas as pessoas):\n• Presente: -as (mi amas, vi amas, li amas)\n• Passado: -is (mi amis)\n• Futuro: -os (mi amos)\n• Condicional: -us (mi amus)\n• Volitivo/Imperativo: -u (amu!)\n\nPARTICÍPIOS:\n• Ativo presente: -ant- (amanta = que ama)\n• Ativo passado: -int- (aminta = que amou)\n• Passivo presente: -at- (amata = amado)",
+    syntax:"ORDEM DAS PALAVRAS:\nOrdem básica SVO, mas flexível devido ao acusativo.\n\n• Mi vidas la libron. (Eu vejo o livro.) — padrão\n• La libron mi vidas. (O livro, eu vejo.) — ênfase no objeto\n\nARTIGOS:\n• Definido: la (la libro = o livro)\n• Indefinido: inexistente (libro = um livro / o livro)\n\nPRONOMES:\nmi (eu), vi (você/vocês), li (ele), ŝi (ela), ĝi (ele/ela neutro), ni (nós), ili (eles)\n\nNEGAÇÃO:\n• ne (não): Mi ne amas. = Eu não amo.\n• neniu (nenhum), neniam (nunca), nenio (nada)",
+    writingSystem:"ALFABETO ESPERANTO (28 letras):\na b c ĉ d e f g ĝ h ĥ i j ĵ k l m n o p r s ŝ t u ŭ v z\n\nLETRAS ESPECIAIS (acento circunflexo):\n• ĉ = /tʃ/ (como 'tch' em 'tchau')\n• ĝ = /dʒ/ (como 'dj' em 'djinn')\n• ĥ = /x/ (como 'rr' no espanhol)\n• ĵ = /ʒ/ (como 'j' em 'bonjour')\n• ŝ = /ʃ/ (como 'sh' em 'show')\n• ŭ = /w/ (usado em 'aŭ' e 'eŭ')\n\nPRINCÍPIO FUNDAMENTAL: Uma letra = Um som. Sem exceções.",
+    custom:[
+      {title:"Afixos Derivacionais",content:"O Esperanto usa um sistema produtivo de afixos para criar novas palavras:\n\nPREFIXOS:\n• mal- (oposto): bona → malbona (mau), granda → malgranda (pequeno)\n• re- (de novo): fari → refari (refazer)\n• ek- (início de ação): kuri → ekkuri (começar a correr)\n• mis- (incorretamente): kompreni → miskompreni (mal-entender)\n• dis- (dispersão): doni → disdoni (distribuir)\n\nSUFIXOS NOMINAIS:\n• -ejo (lugar): lerni → lernejo (escola)\n• -isto (profissional): muziko → muzikisto (músico)\n• -ino (feminino): amiko → amikino (amiga)\n• -ido (descendente): bovo → bovido (bezerro)\n• -eco (qualidade abstrata): bona → boneco (bondade)\n• -aĵo (coisa concreta): nova → novaĵo (novidade)"}
+    ]
+  },
+  phonology:{
+    usedConsonants:["p","b","t","d","k","g","f","v","s","z","ʃ","ʒ","tʃ","dʒ","x","h","m","n","r","l","j"],
+    usedVowels:["a","e","i","o","u"],
+    toneSystem:"Sem tons. Acento tônico sempre na penúltima sílaba: li-BRO, ho-MO, sa-LU-ton.",
+    notes:"Esperanto tem pronúncia completamente regular e fonética.\n\nPONTOS ESPECIAIS:\n• O 'r' é vibrante (como no espanhol/italiano)\n• Todas as vogais são curtas e claras: a, e, i, o, u\n• Ditongos: aŭ /aw/ (como em 'mau'), eŭ /ew/\n• O 'c' sempre = /ts/ (como em 'pizza')\n• Sem encontros consonantais difíceis\n• Sem fonemas que não existam nas línguas europeias principais",
+    phonotactics:"Estrutura silábica: (C)(C)V(C)(C)\nPermite encontros consonantais moderados na onset e coda.\nExemplos: stri- (strio = faixa), -nkt- (punkto = ponto)"
+  }
+};
+
+// ── STORAGE & UTILS ───────────────────────────────────────────────────────────
+const SK="verbarium_dicts_v1", SK2="verbarium_study_v1", SK3="verbarium_prefs_v1";
+const ld = (k,d) => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):d; } catch { return d; } };
+const sv = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} };
+const STUDY0 = {xp:0,streak:0,lastSession:"",lessonProgress:{},memScores:{}};
+const b64 = blob => new Promise(r => { const f=new FileReader(); f.onloadend=()=>r(f.result); f.readAsDataURL(blob); });
+const dlFile = (c,n,t) => { const b=new Blob([c],{type:t}); const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download=n; a.click(); URL.revokeObjectURL(u); };
+const expConfor = d => dlFile(JSON.stringify({confor_version:"1.0",app:"Verbarium PRO",exported_at:new Date().toISOString(),author:d.author||"",conlang:{id:d.id,name:d.name,description:d.description,entries:d.entries,phrases:d.phrases||[],lessons:d.lessons||[],grammar:d.grammar||{},phonology:d.phonology||{}}},null,2),`${d.name.replace(/\s+/g,"_")}.confor`,"application/json");
+const expJSON = d => dlFile(JSON.stringify(d,null,2),`${d.name}.json`,"application/json");
+const expCSV = es => dlFile("Palavra,Tradução,Classe,Pronúncia,Etimologia,Tags\n"+es.map(e=>`"${e.word}","${e.translation}","${e.class}","${e.pronunciation||""}","${e.etymology||""}","${(e.tags||[]).join(";")}"`).join("\n"),"vocabulario.csv","text/csv");
+const expXLS = d => { const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Palavra","Tradução","Classe","Pronúncia","Etimologia","Definição","Tags","Notas"],...d.entries.map(e=>[e.word,e.translation,e.class,e.pronunciation||"",e.etymology||"",e.definition||"",(e.tags||[]).join("; "),e.notes||""])]),"Vocabulário"); XLSX.writeFile(wb,`${d.name}.xlsx`); };
+const mergeDict = (ex,imp) => ({...ex,name:imp.name,description:imp.description,entries:[...ex.entries.map(e=>{const u=imp.entries?.find(ie=>ie.id===e.id); return u?{...u,audio:e.audio,image:e.image}:e;}),...(imp.entries||[]).filter(ie=>!ex.entries.find(e=>e.id===ie.id))],phrases:imp.phrases||ex.phrases||[],lessons:imp.lessons||ex.lessons||[],grammar:imp.grammar||ex.grammar||{},phonology:imp.phonology||ex.phonology||{}});
+
+// ── SCREEN HOOK ───────────────────────────────────────────────────────────────
+function useScreen() {
+  const get = () => ({ w:window.innerWidth, mobile:window.innerWidth<640, tablet:window.innerWidth>=640&&window.innerWidth<1024 });
+  const [s,ss] = useState(get);
+  useEffect(() => {
+    const h = () => ss(get());
+    window.addEventListener("resize",h);
+    window.addEventListener("orientationchange",()=>setTimeout(h,250));
+    return () => { window.removeEventListener("resize",h); };
+  },[]);
+  return s;
+}
+
+// ── SVG ICONS ─────────────────────────────────────────────────────────────────
+const SVG = {
+  home:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+  book:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  chat:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  rules:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+  sound:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>,
+  lesson:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+  game:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13" strokeLinecap="round" strokeWidth="3"/><line x1="18" y1="11" x2="18.01" y2="11" strokeLinecap="round" strokeWidth="3"/><rect x="2" y="6" width="20" height="12" rx="3"/></svg>,
+  trophy:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 4H17V11C17 13.761 14.761 16 12 16C9.239 16 7 13.761 7 11V4Z"/><path d="M7 5H3V9C3 10.657 4.343 12 6 12H7"/><path d="M17 5H21V9C21 10.657 19.657 12 18 12H17"/><polyline points="8 21 12 21 16 21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
+  settings:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  search:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>,
+  plus:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>,
+  x:       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  edit:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  trash:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  mic:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>,
+  play:    <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
+  stop:    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>,
+  check:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>,
+  globe:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+  dl:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  up:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+  menu:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+  img:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+  palette: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12a10 10 0 0 0 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>,
+  lang:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>,
+};
+const Ic = ({n,sz=16}) => <span style={{display:"inline-flex",width:sz,height:sz,flexShrink:0}}>{SVG[n]||null}</span>;
+
+// ── AUDIO RECORDER ────────────────────────────────────────────────────────────
+function AudioRec({existing, onSave, accent, label="Gravar pronúncia"}) {
+  const [rec, setRec] = useState(false);
+  const [aud, setAud] = useState(existing||null);
+  const [playing, setPlaying] = useState(false);
+  const [secs, setSecs] = useState(0);
+  const mrRef=useRef(); const chRef=useRef([]); const tmRef=useRef(); const aRef=useRef();
+
+  const startRec = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      const mr = new MediaRecorder(stream, {mimeType: MediaRecorder.isTypeSupported("audio/webm")?"audio/webm":"audio/ogg"});
+      chRef.current = [];
+      mr.ondataavailable = e => { if(e.data.size>0) chRef.current.push(e.data); };
+      mr.onstop = async () => {
+        const blob = new Blob(chRef.current,{type:mr.mimeType});
+        const d = await b64(blob);
+        setAud(d); onSave(d);
+        stream.getTracks().forEach(t=>t.stop());
+        clearInterval(tmRef.current); setSecs(0);
+      };
+      mrRef.current = mr; mr.start(100); setRec(true); setSecs(0);
+      tmRef.current = setInterval(()=>setSecs(x=>x+1),1000);
+    } catch(e) { alert("Permissão de microfone necessária."); }
+  };
+  const stopRec = () => { mrRef.current?.stop(); setRec(false); };
+  const playAud = () => {
+    if(!aud) return;
+    const a = new Audio(aud); aRef.current=a; a.play(); setPlaying(true);
+    a.onended = () => setPlaying(false);
+  };
+  const stopPlay = () => { aRef.current?.pause(); setPlaying(false); };
+
+  const bs = {display:"inline-flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:9,cursor:"pointer",fontFamily:"inherit",fontSize:12,border:"none",transition:"all 0.15s"};
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+      {rec
+        ? <button style={{...bs,background:"rgba(255,80,80,0.2)",color:"#ff5555",border:"1px solid rgba(255,80,80,0.4)"}} onClick={stopRec}><Ic n="stop"/>Parar ({secs}s)</button>
+        : <button style={{...bs,background:"rgba(255,255,255,0.06)",color:accent,border:`1px solid ${accent}50`}} onClick={startRec}><Ic n="mic"/>{aud?"Re-gravar":label}</button>
+      }
+      {aud && !rec && (
+        playing
+          ? <button style={{...bs,background:"rgba(255,255,255,0.06)",color:accent,border:`1px solid ${accent}40`}} onClick={stopPlay}><Ic n="stop"/>Parar</button>
+          : <button style={{...bs,background:"rgba(255,255,255,0.06)",color:accent,border:`1px solid ${accent}40`}} onClick={playAud}><Ic n="play"/>Ouvir</button>
+      )}
+      {aud && !rec && (
+        <button style={{...bs,color:"#ff6060",background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.25)"}} onClick={()=>{setAud(null);onSave(null);}}><Ic n="trash"/>Remover</button>
+      )}
+      {aud && <span style={{fontSize:10,color:accent,opacity:0.7}}>✓ salvo</span>}
+    </div>
+  );
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function Modal({onClose, title, children, wide, t}) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(8px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16,animation:"fadeIn 0.15s"}} onClick={onClose}>
+      <div style={{background:t.light?"#faf4e8":"#100e1c",backgroundImage:t.bg,border:`1px solid ${t.cb}`,borderRadius:20,width:"100%",maxWidth:wide?820:620,maxHeight:"92vh",overflowY:"auto",animation:"slideUp 0.2s",boxShadow:`0 30px 80px rgba(0,0,0,0.6)`}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 24px 0"}}>
+          <span style={{fontFamily:t.fD,fontSize:11,color:t.muted,letterSpacing:2,textTransform:"uppercase"}}>{title}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",color:t.muted,cursor:"pointer",display:"flex",padding:4}}><Ic n="x" sz={18}/></button>
+        </div>
+        <div style={{padding:"16px 24px 24px"}}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── ENTRY FORM ────────────────────────────────────────────────────────────────
+function EntryForm({entry, onSave, onCancel, t}) {
+  const [f, setF] = useState(entry || {word:"",translation:"",class:"substantivo",pronunciation:"",etymology:"",definition:"",examples:[""],tags:[],roots:[],notes:"",audio:null,image:null});
+  const [ti, setTi] = useState(""); const [imgMode, setImgMode] = useState("url");
+  const s = (k,v) => setF(p=>({...p,[k]:v}));
+  const addTag = e => { if(e.key==="Enter"&&ti.trim()){ s("tags",[...(f.tags||[]),ti.trim()]); setTi(""); } };
+  const imgRef = useRef();
+  const handleFile = async e => { const file=e.target.files[0]; if(!file)return; const d=await b64(file); s("image",d); };
+  const inp = {background:t.inp,border:`1px solid ${t.cb}`,color:t.text,padding:"8px 12px",borderRadius:9,fontFamily:t.fB,fontSize:14,outline:"none",width:"100%"};
+  const lbl = {fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:4};
+  const g = {marginBottom:12};
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,...g}}>
+        <div><label style={lbl}>Palavra *</label><input style={inp} value={f.word} onChange={e=>s("word",e.target.value)} placeholder="ex: ami"/></div>
+        <div><label style={lbl}>Tradução *</label><input style={inp} value={f.translation} onChange={e=>s("translation",e.target.value)} placeholder="ex: amar"/></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,...g}}>
+        <div><label style={lbl}>Pronúncia IPA</label><input style={inp} value={f.pronunciation} onChange={e=>s("pronunciation",e.target.value)} placeholder="/aˈmi/"/></div>
+        <div><label style={lbl}>Classe</label><select style={{...inp,cursor:"pointer"}} value={f.class} onChange={e=>s("class",e.target.value)}>{WC.map(c=><option key={c}>{c}</option>)}</select></div>
+      </div>
+      <div style={g}><label style={lbl}>Definição</label><textarea style={{...inp,resize:"vertical",minHeight:60}} value={f.definition} onChange={e=>s("definition",e.target.value)}/></div>
+      <div style={g}><label style={lbl}>Etimologia</label><input style={inp} value={f.etymology} onChange={e=>s("etymology",e.target.value)}/></div>
+      <div style={g}><label style={lbl}>Exemplo</label><input style={inp} value={f.examples?.[0]||""} onChange={e=>s("examples",[e.target.value])} placeholder="Frase + tradução"/></div>
+      <div style={g}><label style={lbl}>Raízes / Afixos (vírgula)</label><input style={inp} value={(f.roots||[]).join(", ")} onChange={e=>s("roots",e.target.value.split(",").map(r=>r.trim()).filter(Boolean))}/></div>
+      <div style={g}><label style={lbl}>Tags (Enter para adicionar)</label><input style={inp} value={ti} onChange={e=>setTi(e.target.value)} onKeyDown={addTag} placeholder="ex: básico, emoções"/>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>{(f.tags||[]).map(tag=><span key={tag} style={{fontSize:10,background:t.tag,color:t.tagT,padding:"2px 8px",borderRadius:20,cursor:"pointer"}} onClick={()=>s("tags",f.tags.filter(x=>x!==tag))}>{tag} ✕</span>)}</div>
+      </div>
+      <div style={g}><label style={lbl}>Notas</label><textarea style={{...inp,resize:"vertical",minHeight:48}} value={f.notes} onChange={e=>s("notes",e.target.value)}/></div>
+      <div style={g}>
+        <label style={lbl}>🖼️ Imagem</label>
+        <div style={{display:"flex",gap:7,marginBottom:7}}>
+          {["url","upload"].map(m=><button key={m} onClick={()=>setImgMode(m)} style={{padding:"4px 12px",borderRadius:7,border:`1px solid ${imgMode===m?t.accent:t.cb}`,background:imgMode===m?t.ag:"transparent",color:imgMode===m?t.accent:t.muted,cursor:"pointer",fontSize:12,fontFamily:t.fB}}>{m==="url"?"URL":"Upload"}</button>)}
+        </div>
+        {imgMode==="url"
+          ? <input style={inp} value={typeof f.image==="string"&&f.image.startsWith("http")?f.image:""} onChange={e=>s("image",e.target.value)} placeholder="https://..."/>
+          : <><button style={{display:"flex",alignItems:"center",gap:5,padding:"7px 13px",background:t.surf,color:t.accent,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontSize:13,fontFamily:t.fB}} onClick={()=>imgRef.current?.click()}><Ic n="img"/>Escolher arquivo</button><input ref={imgRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleFile}/></>
+        }
+        {f.image && <img src={f.image} alt="" style={{marginTop:7,height:60,borderRadius:7,objectFit:"cover",border:`1px solid ${t.cb}`}} onError={e=>e.target.style.display="none"}/>}
+      </div>
+      <div style={g}><label style={lbl}>Áudio</label><AudioRec existing={f.audio} onSave={v=>s("audio",v)} accent={t.accent}/></div>
+      <div style={{display:"flex",gap:8,marginTop:8}}>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"9px 18px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,fontWeight:600}} onClick={()=>onSave(f)}><Ic n="check"/>{entry?.id?"Salvar":"Adicionar"}</button>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"9px 13px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13}} onClick={onCancel}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+// ── GAME: FIND TRANSLATION / FIND WORD ────────────────────────────────────────
+function FindGame({entries, onBack, onXP, t, L, reverse}) {
+  const pool = useMemo(()=>[...entries].sort(()=>Math.random()-0.5).slice(0,Math.min(entries.length,10)),[]);
+  const [idx, setIdx] = useState(0);
+  const [sel, setSel] = useState(null);
+  const [score, setScore] = useState(0);
+  const [done, setDone] = useState(false);
+  const card = pool[idx];
+  const choices = useMemo(() => {
+    if(!card) return [];
+    const wrong = [...entries].filter(e=>e.id!==card.id).sort(()=>Math.random()-0.5).slice(0,3);
+    return [...wrong,card].sort(()=>Math.random()-0.5);
+  },[idx,card]);
+
+  const handle = c => {
+    if(sel) return;
+    setSel(c.id);
+    if(c.id===card.id){ setScore(s=>s+10); onXP(10); }
+    setTimeout(()=>{ if(idx<pool.length-1){ setIdx(i=>i+1); setSel(null); } else setDone(true); },900);
+  };
+
+  if(done || !card) {
+    return (
+      <div style={{textAlign:"center",padding:60}}>
+        <div style={{fontSize:60,marginBottom:16}}>🏆</div>
+        <h2 style={{fontFamily:t.fD,color:t.accent,marginBottom:8}}>Parabéns!</h2>
+        <p style={{color:t.muted,marginBottom:20}}>+{score} pontos!</p>
+        <button style={{padding:"10px 24px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:10,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={onBack}>{L.btn.back}</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:12}} onClick={onBack}><Ic n="x"/>{L.btn.back}</button>
+        <span style={{fontFamily:t.fD,color:t.accent,fontSize:15}}>{reverse?L.game.findW:L.game.findT}</span>
+        <span style={{marginLeft:"auto",color:t.muted,fontSize:12}}>{idx+1}/{pool.length} · +{score}pts</span>
+      </div>
+      <div style={{textAlign:"center",marginBottom:24,padding:"28px 20px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:18}}>
+        <div style={{fontSize:11,color:t.muted,marginBottom:8}}>{reverse?"Tradução":"Palavra"}</div>
+        <div style={{fontFamily:reverse?t.fB:t.fD,fontSize:reverse?20:32,color:t.accent,textShadow:`0 0 20px ${t.ag}`}}>{reverse?card.translation:card.word}</div>
+        {!reverse&&card.pronunciation&&<div style={{fontSize:13,color:t.muted,fontStyle:"italic",marginTop:4}}>{card.pronunciation}</div>}
+        {reverse&&card.audio&&<button style={{margin:"10px auto 0",display:"flex",alignItems:"center",gap:5,padding:"5px 12px",background:t.surf,color:t.accent,border:`1px solid ${t.cb}`,borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:t.fB}} onClick={()=>new Audio(card.audio).play()}><Ic n="play"/>Ouvir</button>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {choices.map(c => {
+          const ok=c.id===card.id; const isSel=sel===c.id;
+          const bg=sel?(ok?"rgba(34,197,94,0.15)":isSel?"rgba(239,68,68,0.15)":t.card):t.card;
+          const border=sel?(ok?"#22c55e":isSel?"#ef4444":t.cb):t.cb;
+          const color=sel?(ok?"#22c55e":isSel?"#ef4444":t.muted):t.text;
+          return (
+            <div key={c.id} onClick={()=>handle(c)} style={{background:bg,border:`1px solid ${border}`,borderRadius:14,padding:"14px 12px",cursor:sel?"default":"pointer",textAlign:"center",fontSize:reverse?17:14,fontFamily:reverse?t.fD:t.fB,color,minHeight:62,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",animation:isSel&&!ok?"shake 0.3s":""}}>
+              {reverse?c.word:c.translation}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── GAME: MIXED LETTERS ───────────────────────────────────────────────────────
+function MixedGame({entries, onBack, onXP, t, L}) {
+  const pool = useMemo(()=>[...entries].filter(e=>e.word.length>=3).sort(()=>Math.random()-0.5).slice(0,8),[]);
+  const [idx, setIdx] = useState(0);
+  const [score, setScore] = useState(0);
+  const [done, setDone] = useState(false);
+  const [built, setBuilt] = useState([]);
+  const [avail, setAvail] = useState([]);
+  const [result, setResult] = useState(null);
+  const card = pool[idx];
+
+  useEffect(() => {
+    if(card) {
+      const sh = [...card.word.toUpperCase()].sort(()=>Math.random()-0.5).map((ch,i)=>({ch,id:i}));
+      setAvail(sh); setBuilt([]); setResult(null);
+    }
+  },[idx]);
+
+  const pick = item => { setBuilt(b=>[...b,item]); setAvail(a=>a.filter(x=>x.id!==item.id)); };
+  const unpick = item => { setAvail(a=>[...a,item]); setBuilt(b=>b.filter(x=>x.id!==item.id)); };
+  const checkAns = () => {
+    const ans = built.map(x=>x.ch).join("");
+    if(ans===card.word.toUpperCase()){
+      setResult("ok"); setScore(s=>s+15); onXP(15);
+      setTimeout(()=>{ if(idx<pool.length-1){ setIdx(i=>i+1); } else setDone(true); },800);
+    } else {
+      setResult("err");
+      setTimeout(()=>{ const all=[...built,...avail].sort(()=>Math.random()-0.5).map((x,i)=>({...x,id:i})); setAvail(all); setBuilt([]); setResult(null); },800);
+    }
+  };
+  const chip = (item,onClick) => (
+    <div key={item.id} onClick={()=>onClick(item)} style={{width:38,height:42,background:t.surf,border:`1px solid ${t.cb}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontFamily:t.fD,fontSize:18,color:t.accent,transition:"all 0.15s",userSelect:"none"}}>
+      {item.ch}
+    </div>
+  );
+
+  if(done || !card) {
+    return (
+      <div style={{textAlign:"center",padding:60}}>
+        <div style={{fontSize:60,marginBottom:16}}>🎯</div>
+        <h2 style={{fontFamily:t.fD,color:t.accent,marginBottom:8}}>Parabéns! +{score} pts</h2>
+        <button style={{padding:"10px 24px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:10,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={onBack}>{L.btn.back}</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:12}} onClick={onBack}><Ic n="x"/>{L.btn.back}</button>
+        <span style={{fontFamily:t.fD,color:t.accent,fontSize:15}}>{L.game.mixed}</span>
+        <span style={{marginLeft:"auto",color:t.muted,fontSize:12}}>{idx+1}/{pool.length} · +{score}pts</span>
+      </div>
+      <div style={{textAlign:"center",padding:"18px",background:t.card,border:`1px solid ${t.cb}`,borderRadius:16,marginBottom:18}}>
+        <div style={{fontSize:11,color:t.muted,marginBottom:4}}>Tradução</div>
+        <div style={{fontSize:18,color:t.text,marginBottom:3}}>{card.translation}</div>
+        <div style={{fontSize:13,color:t.muted,fontStyle:"italic"}}>{card.pronunciation}</div>
+      </div>
+      <div style={{background:result==="ok"?"rgba(34,197,94,0.1)":result==="err"?"rgba(239,68,68,0.1)":t.surf,border:`1px solid ${result==="ok"?"#22c55e":result==="err"?"#ef4444":t.cb}`,borderRadius:14,padding:"14px",minHeight:54,display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center",marginBottom:14,transition:"all 0.2s"}}>
+        {built.length===0 ? <span style={{color:t.muted,fontSize:13,alignSelf:"center"}}>Clique nas letras...</span> : built.map(item=>chip(item,unpick))}
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center",marginBottom:14}}>{avail.map(item=>chip(item,pick))}</div>
+      <div style={{textAlign:"center"}}><button style={{padding:"10px 28px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:10,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={checkAns} disabled={built.length===0}>Verificar</button></div>
+    </div>
+  );
+}
+
+// ── GAME: FLASHCARD ───────────────────────────────────────────────────────────
+function FlashGame({entries, onBack, onXP, t, L, onMem}) {
+  const pool = useMemo(()=>[...entries].sort(()=>Math.random()-0.5).slice(0,10),[]);
+  const [idx, setIdx] = useState(0);
+  const [flipped, setFlip] = useState(false);
+  const [score, setScore] = useState({ok:0,fail:0});
+  const [done, setDone] = useState(false);
+  const card = pool[idx];
+
+  const next = ok => {
+    if(ok){ setScore(s=>({...s,ok:s.ok+1})); onXP(8); onMem(card.id,true); }
+    else { setScore(s=>({...s,fail:s.fail+1})); onMem(card.id,false); }
+    if(idx<pool.length-1){ setIdx(i=>i+1); setFlip(false); } else setDone(true);
+  };
+
+  if(done || !card) {
+    return (
+      <div style={{textAlign:"center",padding:60}}>
+        <div style={{fontSize:60,marginBottom:16}}>🎓</div>
+        <h2 style={{fontFamily:t.fD,color:t.accent,marginBottom:8}}>Sessão Concluída!</h2>
+        <p style={{color:t.muted,marginBottom:24}}>✅ {score.ok} · ❌ {score.fail}</p>
+        <button style={{padding:"10px 24px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:10,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={onBack}>{L.btn.back}</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:12}} onClick={onBack}><Ic n="x"/>{L.btn.back}</button>
+        <span style={{fontFamily:t.fD,color:t.accent,fontSize:15}}>{L.game.flash}</span>
+        <span style={{marginLeft:"auto",color:t.muted,fontSize:12}}>{idx+1}/{pool.length}</span>
+      </div>
+      <div style={{maxWidth:480,margin:"0 auto",textAlign:"center"}}>
+        <div onClick={()=>setFlip(f=>!f)} style={{background:t.card,border:`1px solid ${flipped?t.accent:t.cb}`,borderRadius:20,padding:"44px 28px",cursor:"pointer",minHeight:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"all 0.3s",boxShadow:flipped?`0 0 30px ${t.ag}`:"none"}}>
+          {!flipped ? (
+            <>
+              <div style={{fontFamily:t.fD,fontSize:34,color:t.accent,textShadow:`0 0 20px ${t.ag}`,marginBottom:6}}>{card.word}</div>
+              <div style={{fontSize:13,color:t.muted,fontStyle:"italic"}}>{card.pronunciation}</div>
+              {card.image && <img src={card.image} alt="" style={{marginTop:12,height:80,borderRadius:10,objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>}
+              <div style={{fontSize:11,color:t.muted,marginTop:16}}>Toque para revelar</div>
+            </>
+          ) : (
+            <>
+              <div style={{fontSize:12,color:t.muted,marginBottom:4,fontStyle:"italic"}}>{card.word}</div>
+              <div style={{fontFamily:t.fD,fontSize:22,color:t.accent,marginBottom:10}}>{card.translation}</div>
+              <div style={{fontSize:13,color:t.text,lineHeight:1.6,maxWidth:340}}>{card.definition}</div>
+              {card.audio && (
+                <button style={{marginTop:12,display:"flex",alignItems:"center",gap:5,padding:"5px 12px",background:t.surf,color:t.accent,border:`1px solid ${t.cb}`,borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:t.fB}} onClick={e=>{e.stopPropagation();new Audio(card.audio).play();}}>
+                  <Ic n="play"/>Ouvir
+                </button>
+              )}
+            </>
+          )}
+        </div>
+        {flipped && (
+          <div style={{display:"flex",gap:12,justifyContent:"center",marginTop:18}}>
+            <button style={{padding:"10px 28px",background:"rgba(34,197,94,0.2)",color:"#22c55e",border:"1px solid rgba(34,197,94,0.4)",borderRadius:12,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={()=>next(true)}>✅ Sabia</button>
+            <button style={{padding:"10px 28px",background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.35)",borderRadius:12,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={()=>next(false)}>❌ Revisar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── GAME: MATCH ───────────────────────────────────────────────────────────────
+function MatchGame({entries, onBack, onXP, t, L}) {
+  const pool = useMemo(()=>[...entries].sort(()=>Math.random()-0.5).slice(0,6),[]);
+  const [sel, setSel] = useState(null);
+  const [matched, setMatched] = useState(new Set());
+  const [wrong, setWrong] = useState(new Set());
+  const [score, setScore] = useState(0);
+  const cards = useMemo(()=>[...pool.map(e=>({id:e.id,text:e.word,type:"w"})),...[...pool].sort(()=>Math.random()-0.5).map(e=>({id:e.id,text:e.translation,type:"t"}))],[]);
+  const done = matched.size===pool.length*2;
+
+  const handle = c => {
+    const k=c.id+c.type;
+    if(matched.has(k)||wrong.has(k)) return;
+    if(!sel){ setSel(c); return; }
+    if(sel.id===c.id&&sel.type!==c.type){ setMatched(m=>new Set([...m,c.id+"w",c.id+"t"])); setScore(s=>s+10); onXP(10); }
+    else { const w=new Set([sel.id+sel.type,k]); setWrong(w); setTimeout(()=>setWrong(new Set()),700); }
+    setSel(null);
+  };
+
+  if(done) {
+    return (
+      <div style={{textAlign:"center",padding:60}}>
+        <div style={{fontSize:60,marginBottom:16}}>🏆</div>
+        <h2 style={{fontFamily:t.fD,color:t.accent,marginBottom:8}}>Perfeito! +{score} pts</h2>
+        <button style={{padding:"10px 24px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:10,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={onBack}>{L.btn.back}</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:12}} onClick={onBack}><Ic n="x"/>{L.btn.back}</button>
+        <span style={{fontFamily:t.fD,color:t.accent,fontSize:15}}>{L.game.match}</span>
+        <span style={{marginLeft:"auto",color:t.accent,fontFamily:t.fD}}>+{score}pts</span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,maxWidth:560,margin:"0 auto"}}>
+        {cards.map(c => {
+          const k=c.id+c.type; const isSel=sel?.id===c.id&&sel?.type===c.type;
+          const isM=matched.has(k); const isW=wrong.has(k);
+          return (
+            <div key={k} onClick={()=>handle(c)} style={{background:isM?"rgba(34,197,94,0.15)":isW?"rgba(239,68,68,0.15)":isSel?t.ag:t.card,border:`1px solid ${isM?"#22c55e":isW?"#ef4444":isSel?t.accent:t.cb}`,borderRadius:12,padding:"14px 10px",cursor:"pointer",textAlign:"center",fontFamily:c.type==="w"?t.fD:t.fB,fontSize:c.type==="w"?18:13,color:isM?"#22c55e":isW?"#ef4444":c.type==="w"?t.accent:t.text,minHeight:62,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.18s",animation:isW?"shake 0.3s":""}}>
+              {isM ? <Ic n="check" sz={20}/> : c.text}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── GAME: CROSSWORD ───────────────────────────────────────────────────────────
+function CrossGame({entries, onBack, onXP, t, L}) {
+  const words = entries.slice(0,4).map(e=>({word:e.word.toUpperCase(),def:e.translation}));
+  const SZ=12; const grid=Array(SZ).fill(null).map(()=>Array(SZ).fill(null)); const placed=[];
+  const pw = (word,r,c,h) => { for(let i=0;i<word.length;i++) h?grid[r][c+i]=word[i]:grid[r+i][c]=word[i]; placed.push({word,def:words.find(w=>w.word===word)?.def||"",r,c,h,num:placed.length+1}); };
+  if(words[0]?.word.length<=9) pw(words[0].word,2,1,true);
+  if(words[1]?.word.length<=8) pw(words[1].word,1,4,false);
+  if(words[2]?.word.length<=9) pw(words[2].word,5,2,true);
+  if(words[3]?.word.length<=7) pw(words[3].word,3,8,false);
+  const [inputs, setInputs] = useState({});
+  const [checked, setChecked] = useState(false);
+  const [won, setWon] = useState(false);
+  const setInp = (r,c,v) => setInputs(p=>({...p,[`${r},${c}`]:v.toUpperCase().slice(0,1)}));
+  const doCheck = () => {
+    let all=true;
+    for(let r=0;r<SZ;r++) for(let c=0;c<SZ;c++) if(grid[r][c]&&grid[r][c]!==(inputs[`${r},${c}`]||"")) all=false;
+    setChecked(true); if(all){ setWon(true); onXP(40); }
+  };
+
+  if(won) {
+    return (
+      <div style={{textAlign:"center",padding:60}}>
+        <div style={{fontSize:60,marginBottom:16}}>🎉</div>
+        <h2 style={{fontFamily:t.fD,color:t.accent,marginBottom:8}}>Completo! +40 XP</h2>
+        <button style={{padding:"10px 24px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:10,cursor:"pointer",fontFamily:t.fB,fontSize:14}} onClick={onBack}>{L.btn.back}</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:12}} onClick={onBack}><Ic n="x"/>{L.btn.back}</button>
+        <span style={{fontFamily:t.fD,color:t.accent,fontSize:15}}>{L.game.cross}</span>
+      </div>
+      <div style={{display:"flex",gap:24,flexWrap:"wrap",alignItems:"flex-start"}}>
+        <div style={{overflowX:"auto"}}>
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${SZ},30px)`,gap:2}}>
+            {Array(SZ).fill(null).map((_,r)=>Array(SZ).fill(null).map((__,c)=>{
+              const ch=grid[r][c]; const k=`${r},${c}`; const inp=inputs[k]||"";
+              const ok=checked&&ch&&inp===ch; const err=checked&&ch&&inp&&inp!==ch;
+              if(!ch) return <div key={k} style={{width:30,height:30,background:t.light?"#ccd0dd":"#050510",borderRadius:3}}/>;
+              return (
+                <div key={k} style={{width:30,height:30}}>
+                  <input maxLength={1} value={inp} onChange={e=>setInp(r,c,e.target.value)} style={{width:"100%",height:"100%",textAlign:"center",background:ok?"rgba(34,197,94,0.2)":err?"rgba(239,68,68,0.2)":t.surf,border:`1px solid ${ok?"#22c55e":err?"#ef4444":t.cb}`,color:t.accent,borderRadius:3,fontFamily:t.fD,fontSize:14,outline:"none",cursor:"text"}}/>
+                </div>
+              );
+            }))}
+          </div>
+          <button style={{marginTop:12,padding:"8px 22px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13}} onClick={doCheck}>Verificar</button>
+          {checked&&!won&&<p style={{color:"#ef4444",marginTop:8,fontSize:12}}>Continue tentando!</p>}
+        </div>
+        <div style={{flex:1,minWidth:160}}>
+          <div style={{fontFamily:t.fD,color:t.accent,fontSize:11,letterSpacing:1,marginBottom:8}}>HORIZONTAIS</div>
+          {placed.filter(p=>p.h).map(p=><div key={p.num} style={{marginBottom:7,fontSize:13}}><span style={{color:t.accent,fontFamily:t.fD,marginRight:5}}>{p.num}.</span><span style={{color:t.muted}}>{p.def}</span></div>)}
+          <div style={{fontFamily:t.fD,color:t.accent,fontSize:11,letterSpacing:1,marginBottom:8,marginTop:14}}>VERTICAIS</div>
+          {placed.filter(p=>!p.h).map(p=><div key={p.num} style={{marginBottom:7,fontSize:13}}><span style={{color:t.accent,fontFamily:t.fD,marginRight:5}}>{p.num}.</span><span style={{color:t.muted}}>{p.def}</span></div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PHONOLOGY SECTION ─────────────────────────────────────────────────────────
+function PhonSection({dict, onChange, t}) {
+  const ph = dict.phonology||{usedConsonants:[],usedVowels:[],toneSystem:"",notes:""};
+  const tog = (k,p) => { const a=ph[k]||[]; onChange({...ph,[k]:a.includes(p)?a.filter(x=>x!==p):[...a,p]}); };
+  const cell = (p,used,k) => p ? (
+    <div key={p} onClick={()=>tog(k,p)} style={{padding:"5px 3px",textAlign:"center",background:used?t.ag:t.surf,border:`1px solid ${used?t.accent:t.cb}`,borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"monospace",color:used?t.accent:t.muted,transition:"all 0.15s",boxShadow:used?`0 0 8px ${t.ag}`:"",userSelect:"none"}}>
+      {p}
+    </div>
+  ) : <div/>;
+  const ta = {background:t.inp,border:`1px solid ${t.cb}`,color:t.text,padding:"8px 12px",borderRadius:9,fontFamily:t.fB,fontSize:13,outline:"none",width:"100%"};
+  return (
+    <div>
+      <h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent,marginBottom:4}}>Fonologia</h2>
+      <p style={{color:t.muted,fontSize:13,marginBottom:20}}>Clique nos fonemas para marcar os usados na conlang.</p>
+      <div style={{marginBottom:20}}>
+        <div style={{fontFamily:t.fD,color:t.accent,fontSize:11,letterSpacing:1,marginBottom:8}}>CONSOANTES — {(ph.usedConsonants||[]).length} selecionadas</div>
+        <div style={{overflowX:"auto"}}>
+          {IPA_C.map(row=>(
+            <div key={row.l} style={{display:"grid",gridTemplateColumns:"80px repeat(9,1fr)",gap:3,marginBottom:3,alignItems:"center"}}>
+              <div style={{fontSize:10,color:t.muted,textAlign:"right",paddingRight:6}}>{row.l}</div>
+              {row.r.map((p,i)=>cell(p,(ph.usedConsonants||[]).includes(p),"usedConsonants"))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{marginBottom:20}}>
+        <div style={{fontFamily:t.fD,color:t.accent,fontSize:11,letterSpacing:1,marginBottom:8}}>VOGAIS — {(ph.usedVowels||[]).length} selecionadas</div>
+        <div style={{overflowX:"auto"}}>
+          {IPA_V.map(row=>(
+            <div key={row.l} style={{display:"grid",gridTemplateColumns:"80px repeat(6,1fr)",gap:3,marginBottom:3,alignItems:"center"}}>
+              <div style={{fontSize:10,color:t.muted,textAlign:"right",paddingRight:6}}>{row.l}</div>
+              {row.r.map((p,i)=>cell(p,(ph.usedVowels||[]).includes(p),"usedVowels"))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+        <div><label style={{fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:4}}>Sistema de Tons</label><input style={ta} value={ph.toneSystem||""} onChange={e=>onChange({...ph,toneSystem:e.target.value})}/></div>
+        <div><label style={{fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:4}}>Fonotática</label><input style={ta} value={ph.phonotactics||""} onChange={e=>onChange({...ph,phonotactics:e.target.value})}/></div>
+      </div>
+      <div><label style={{fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:4}}>Notas</label><textarea style={{...ta,resize:"vertical",minHeight:80}} value={ph.notes||""} onChange={e=>onChange({...ph,notes:e.target.value})}/></div>
+    </div>
+  );
+}
+
+// ── GRAMMAR SECTION ───────────────────────────────────────────────────────────
+function GramSection({dict, onChange, t}) {
+  const g = dict.grammar||{morphology:"",syntax:"",writingSystem:"",custom:[]};
+  const [ns, setNs] = useState("");
+  const ta = {background:t.inp,border:`1px solid ${t.cb}`,color:t.text,padding:"10px 12px",borderRadius:9,fontFamily:t.fB,fontSize:13,outline:"none",width:"100%",resize:"vertical",minHeight:100};
+  const lbl = {fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:4,marginTop:14};
+  const addSec = () => { if(ns.trim()){ onChange({...g,custom:[...(g.custom||[]),{title:ns.trim(),content:""}]}); setNs(""); } };
+  return (
+    <div>
+      <h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent,marginBottom:4}}>Gramática</h2>
+      <p style={{color:t.muted,fontSize:13,marginBottom:12}}>Documente as regras gramaticais da sua conlang.</p>
+      {[["morphology","Morfologia"],["syntax","Sintaxe"],["writingSystem","Sistema de Escrita"]].map(([k,lb])=>(
+        <div key={k}><label style={lbl}>{lb}</label><textarea style={ta} value={g[k]||""} onChange={e=>onChange({...g,[k]:e.target.value})}/></div>
+      ))}
+      {(g.custom||[]).map((sec,i)=>(
+        <div key={i}>
+          <div style={{display:"flex",gap:8,marginTop:14,marginBottom:4}}>
+            <input style={{...ta,minHeight:0,flex:1,padding:"5px 10px",fontSize:9,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase"}} value={sec.title} onChange={e=>{const c=[...(g.custom||[])];c[i]={...c[i],title:e.target.value};onChange({...g,custom:c});}}/>
+            <button style={{padding:"5px 10px",background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.3)",color:"#ef4444",borderRadius:7,cursor:"pointer"}} onClick={()=>onChange({...g,custom:(g.custom||[]).filter((_,j)=>j!==i)})}>✕</button>
+          </div>
+          <textarea style={ta} value={sec.content} onChange={e=>{const c=[...(g.custom||[])];c[i]={...c[i],content:e.target.value};onChange({...g,custom:c});}}/>
+        </div>
+      ))}
+      <div style={{display:"flex",gap:8,marginTop:16}}>
+        <input style={{...ta,minHeight:0,flex:1,padding:"8px 12px"}} value={ns} onChange={e=>setNs(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSec()} placeholder="Nome da nova seção..."/>
+        <button style={{padding:"8px 16px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,whiteSpace:"nowrap",fontSize:13}} onClick={addSec}><Ic n="plus"/> Seção</button>
+      </div>
+    </div>
+  );
+}
+
+// ── LESSON SECTION (CORRIGIDO) ────────────────────────────────────────────────
+function LessonSection({dict, onUpdate, study, onStudyUpdate, notify, t, L}) {
+  const [view, setView] = useState("list");
+  const [lf, setLf] = useState({title:"",description:"",entryIds:[],content:""});
+  const [studying, setStudying] = useState(null);
+  const lessons = dict?.lessons||[];
+  const progress = study?.lessonProgress||{};
+
+  const saveLesson = () => {
+    if(!lf.title){ notify("Título obrigatório!","err"); return; }
+    const lesson = {...lf, id: lf.id||Date.now(), created: lf.created||new Date().toISOString().split("T")[0]};
+    const newLessons = lf.id ? lessons.map(l=>l.id===lf.id?lesson:l) : [...lessons,lesson];
+    onUpdate({...dict,lessons:newLessons});
+    onStudyUpdate(s=>({...s,xp:(s.xp||0)+15}));
+    setView("list"); notify("Lição salva! +15 XP");
+  };
+
+  const markDone = id => {
+    onStudyUpdate(s=>({...s,xp:(s.xp||0)+30,lessonProgress:{...s.lessonProgress,[id]:{completed:true,completedAt:new Date().toISOString()}}}));
+    notify("Lição concluída! +30 XP 🎉");
+  };
+
+  // STUDY VIEW
+  if(studying !== null) {
+    const lesson = lessons.find(l=>l.id===studying);
+    if(!lesson) { setStudying(null); return null; }
+    const words = (dict?.entries||[]).filter(e=>(lesson.entryIds||[]).includes(e.id));
+    const isDone = !!progress[studying]?.completed;
+    return (
+      <div style={{maxWidth:720}}>
+        <button style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,marginBottom:20}} onClick={()=>setStudying(null)}><Ic n="x"/>{L.btn.back}</button>
+        <div style={{fontFamily:t.fD,color:t.accent,fontSize:10,letterSpacing:2,marginBottom:6}}>LIÇÃO</div>
+        <h2 style={{fontFamily:t.fD,fontSize:24,color:t.text,marginBottom:6}}>{lesson.title}</h2>
+        <p style={{color:t.muted,fontSize:14,marginBottom:18}}>{lesson.description}</p>
+        {lesson.content && <div style={{background:t.surf,border:`1px solid ${t.cb}`,borderRadius:14,padding:18,marginBottom:18,fontSize:14,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{lesson.content}</div>}
+        <div style={{fontFamily:t.fD,color:t.accent,fontSize:10,letterSpacing:1,marginBottom:10}}>VOCABULÁRIO ({words.length} palavras)</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,marginBottom:20}}>
+          {words.map(e => (
+            <div key={e.id} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:14}}>
+              {e.image && <img src={e.image} alt="" style={{width:"100%",height:70,objectFit:"cover",borderRadius:8,marginBottom:8}} onError={er=>er.target.style.display="none"}/>}
+              <div style={{fontFamily:t.fD,fontSize:17,color:t.accent}}>{e.word}</div>
+              <div style={{fontSize:12,color:t.muted,fontStyle:"italic",marginBottom:4}}>{e.pronunciation}</div>
+              <div style={{fontSize:13,color:t.text,marginBottom:8}}>{e.translation}</div>
+              {e.audio && <button style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:t.surf,color:t.accent,border:`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontFamily:t.fB,fontSize:11}} onClick={()=>new Audio(e.audio).play()}><Ic n="play" sz={12}/>{L.btn.listen}</button>}
+            </div>
+          ))}
+        </div>
+        {!isDone
+          ? <button style={{padding:"11px 28px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:12,cursor:"pointer",fontFamily:t.fB,fontSize:14,fontWeight:600}} onClick={()=>markDone(studying)}>✅ Marcar como concluída (+30 XP)</button>
+          : <div style={{color:"#22c55e",fontFamily:t.fD,fontSize:13}}>✓ Concluída em {new Date(progress[studying].completedAt).toLocaleDateString("pt-BR")}</div>
+        }
+      </div>
+    );
+  }
+
+  // EDIT VIEW
+  if(view==="edit") {
+    return (
+      <div style={{maxWidth:580}}>
+        <button style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,marginBottom:18}} onClick={()=>setView("list")}><Ic n="x"/>{L.btn.cancel}</button>
+        <h2 style={{fontFamily:t.fD,color:t.accent,marginBottom:18}}>{lf.id?"Editar Lição":"Nova Lição"}</h2>
+        {[["title","Título *"],["description","Descrição"]].map(([k,lb])=>(
+          <div key={k} style={{marginBottom:12}}>
+            <label style={{fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:4}}>{lb}</label>
+            <input style={{background:t.inp,border:`1px solid ${t.cb}`,color:t.text,padding:"8px 12px",borderRadius:9,fontFamily:t.fB,fontSize:14,outline:"none",width:"100%"}} value={lf[k]||""} onChange={e=>setLf(p=>({...p,[k]:e.target.value}))}/>
+          </div>
+        ))}
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:4}}>Conteúdo</label>
+          <textarea style={{background:t.inp,border:`1px solid ${t.cb}`,color:t.text,padding:"10px 12px",borderRadius:9,fontFamily:t.fB,fontSize:13,outline:"none",width:"100%",resize:"vertical",minHeight:100}} value={lf.content||""} onChange={e=>setLf(p=>({...p,content:e.target.value}))}/>
+        </div>
+        <div style={{marginBottom:18}}>
+          <label style={{fontSize:9,color:t.muted,fontFamily:t.fD,letterSpacing:1.5,textTransform:"uppercase",display:"block",marginBottom:8}}>Palavras ({(lf.entryIds||[]).length} selecionadas)</label>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:5,maxHeight:200,overflowY:"auto"}}>
+            {(dict?.entries||[]).map(e => {
+              const isSel = (lf.entryIds||[]).includes(e.id);
+              return (
+                <div key={e.id} onClick={()=>setLf(p=>({...p,entryIds:isSel?(p.entryIds||[]).filter(x=>x!==e.id):[...(p.entryIds||[]),e.id]}))} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 10px",background:isSel?t.ag:t.surf,border:`1px solid ${isSel?t.accent:t.cb}`,borderRadius:8,cursor:"pointer"}}>
+                  {isSel && <Ic n="check" sz={12}/>}
+                  <span style={{fontFamily:t.fD,color:isSel?t.accent:t.muted,fontSize:12,flexShrink:0}}>{e.word}</span>
+                  <span style={{color:t.muted,fontSize:11,marginLeft:"auto",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.translation}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <button style={{padding:"9px 22px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:14,fontWeight:600}} onClick={saveLesson}>{L.btn.save}</button>
+      </div>
+    );
+  }
+
+  // LIST VIEW
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
+        <div><h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent}}>{L.nav.lessons}</h2><p style={{color:t.muted,fontSize:12}}>{dict.name} — {lessons.length} lições</p></div>
+        <button style={{display:"flex",alignItems:"center",gap:5,padding:"8px 14px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,fontWeight:600}} onClick={()=>{setLf({title:"",description:"",entryIds:[],content:""});setView("edit");}}>
+          <Ic n="plus"/>Nova Lição
+        </button>
+      </div>
+      {lessons.length===0 ? (
+        <div style={{textAlign:"center",padding:60,color:t.muted}}>
+          <div style={{fontSize:48,marginBottom:12}}>📚</div>
+          <p style={{fontStyle:"italic",marginBottom:20}}>Nenhuma lição criada ainda.</p>
+          <button style={{padding:"9px 20px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13}} onClick={()=>{setLf({title:"",description:"",entryIds:[],content:""});setView("edit");}}>Criar Primeira Lição</button>
+        </div>
+      ) : (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:14}}>
+          {lessons.map(l => {
+            const isDone = !!progress[l.id]?.completed;
+            const wc = (dict?.entries||[]).filter(e=>(l.entryIds||[]).includes(e.id)).length;
+            return (
+              <div key={l.id} style={{background:t.card,border:`1px solid ${isDone?"rgba(34,197,94,0.4)":t.cb}`,borderRadius:16,padding:18,position:"relative"}}>
+                {isDone && <span style={{position:"absolute",top:12,right:14,color:"#22c55e",fontSize:18}}>✓</span>}
+                <div style={{fontFamily:t.fD,fontSize:17,color:isDone?"#22c55e":t.accent,marginBottom:4}}>{l.title}</div>
+                <div style={{fontSize:13,color:t.muted,marginBottom:10,lineHeight:1.5}}>{l.description}</div>
+                <div style={{display:"flex",gap:6,marginBottom:14}}>
+                  <span style={{fontSize:10,background:t.surf,padding:"2px 8px",borderRadius:20,color:t.muted,border:`1px solid ${t.cb}`}}>{wc} palavras</span>
+                  {isDone && <span style={{fontSize:10,background:"rgba(34,197,94,0.15)",padding:"2px 8px",borderRadius:20,color:"#22c55e"}}>Concluída ✓</span>}
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  <button style={{flex:1,padding:"8px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:8,cursor:"pointer",fontFamily:t.fB,fontSize:12,fontWeight:600}} onClick={()=>setStudying(l.id)}>{L.btn.study}</button>
+                  <button style={{padding:"8px 10px",background:t.surf,color:t.muted,border:`1px solid ${t.cb}`,borderRadius:8,cursor:"pointer"}} onClick={()=>{setLf(l);setView("edit");}}><Ic n="edit" sz={14}/></button>
+                  <button style={{padding:"8px 10px",background:"rgba(239,68,68,0.1)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,cursor:"pointer"}} onClick={()=>onUpdate({...dict,lessons:lessons.filter(x=>x.id!==l.id)})}><Ic n="trash" sz={14}/></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SETTINGS SECTION ──────────────────────────────────────────────────────────
+function SettSection({dict, theme, setTheme, lang, setLang, onImport, t, L, notify}) {
+  const fRef=useRef(); const xRef=useRef();
+  const hCF = e => {
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload = ev => {
+      try {
+        const d=JSON.parse(ev.target.result);
+        if(!d.confor_version){ notify("Arquivo .confor inválido","err"); return; }
+        onImport(d.conlang); notify(`"${d.conlang.name}" importada! Estudo preservado ✨`);
+      } catch(err) { notify("Erro ao ler .confor","err"); }
+    };
+    r.readAsText(f); e.target.value="";
+  };
+  const box = {background:t.card,border:`1px solid ${t.cb}`,borderRadius:14,padding:20,marginBottom:14};
+  const hd = {fontFamily:t.fD,color:t.accent,fontSize:11,letterSpacing:1,marginBottom:10,display:"flex",alignItems:"center",gap:7};
+  const Btn = ({lb,ic,fn,primary}) => (
+    <button style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 16px",background:primary?t.accent:t.surf,color:primary?(t.light?"#fff":"#000"):t.accent,border:`1px solid ${primary?t.accent:t.cb}`,borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,transition:"all 0.18s",marginRight:8,marginBottom:8}} onClick={fn}>
+      <Ic n={ic}/>{lb}
+    </button>
+  );
+  return (
+    <div style={{maxWidth:680}}>
+      <h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent,marginBottom:20}}>Configurações</h2>
+      <div style={box}>
+        <div style={hd}><Ic n="palette"/> TEMA VISUAL</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+          {Object.entries(THEMES).map(([k,th])=>(
+            <div key={k} onClick={()=>setTheme(k)} style={{padding:10,borderRadius:12,cursor:"pointer",border:`2px solid ${theme===k?t.accent:t.cb}`,background:theme===k?t.ag:"transparent",transition:"all 0.18s"}}>
+              <div style={{width:"100%",height:36,borderRadius:7,background:th.bg,marginBottom:7,border:"1px solid rgba(255,255,255,0.1)"}}/>
+              <div style={{fontSize:11,fontFamily:t.fD,color:theme===k?t.accent:t.muted,textAlign:"center"}}>{th.icon} {th.name}</div>
+              {th.sp&&<div style={{fontSize:9,color:t.accent,textAlign:"center",marginTop:1}}>✨ animado</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={box}>
+        <div style={hd}><Ic n="lang"/> {L.ui.lang}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {Object.entries(I18N).map(([k,lg])=>(
+            <button key={k} onClick={()=>setLang(k)} style={{display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:10,border:`1px solid ${lang===k?t.accent:t.cb}`,background:lang===k?t.ag:"transparent",color:lang===k?t.accent:t.muted,cursor:"pointer",fontFamily:t.fB,fontSize:13,transition:"all 0.18s"}}>
+              <span style={{fontSize:18}}>{lg.flag}</span>{lg.name}{lang===k&&<Ic n="check" sz={12}/>}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={box}>
+        <div style={hd}>📦 FORMATO .CONFOR</div>
+        <p style={{color:t.muted,fontSize:13,lineHeight:1.7,marginBottom:12}}>Compartilhe sua conlang sem sobrescrever o progresso de estudo do destinatário.</p>
+        <Btn lb="Exportar .confor" ic="dl" fn={()=>expConfor(dict)} primary/>
+        <Btn lb="Importar .confor" ic="up" fn={()=>fRef.current?.click()}/>
+        <input ref={fRef} type="file" accept=".confor,.json" style={{display:"none"}} onChange={hCF}/>
+      </div>
+      <div style={box}>
+        <div style={hd}>📤 EXPORTAR</div>
+        <Btn lb="Excel (.xlsx)" ic="dl" fn={()=>expXLS(dict)}/>
+        <Btn lb="CSV" ic="dl" fn={()=>expCSV(dict.entries)}/>
+        <Btn lb="JSON" ic="dl" fn={()=>expJSON(dict)}/>
+      </div>
+      <div style={box}>
+        <div style={hd}>📥 IMPORTAR EXCEL</div>
+        <p style={{color:t.muted,fontSize:12,marginBottom:10}}>Colunas: <span style={{fontFamily:"monospace",color:t.text,fontSize:11}}>Palavra | Tradução | Classe | Pronúncia | Etimologia | Definição | Tags | Notas</span></p>
+        <Btn lb="Importar Excel" ic="up" fn={()=>xRef.current?.click()}/>
+        <input ref={xRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{
+          const f=e.target.files[0]; if(!f) return;
+          const r=new FileReader();
+          r.onload=ev=>{try{const wb=XLSX.read(ev.target.result,{type:"binary"});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{header:1}).slice(1);const es=rows.filter(r=>r[0]).map((r,i)=>({id:Date.now()+i,word:r[0]||"",translation:r[1]||"",class:r[2]||"substantivo",pronunciation:r[3]||"",etymology:r[4]||"",definition:r[5]||"",tags:(r[6]||"").split(";").map(x=>x.trim()).filter(Boolean),notes:r[7]||"",examples:[],roots:[],audio:null,image:null,created:new Date().toISOString().split("T")[0]}));notify(`${es.length} palavras importadas!`);}catch{notify("Erro ao ler Excel","err");}};
+          r.readAsBinaryString(f); e.target.value="";
+        }}/>
+      </div>
+      <div style={box}>
+        <div style={hd}>💾 ARMAZENAMENTO</div>
+        <p style={{color:t.muted,fontSize:13,lineHeight:1.7}}>✅ Todos os dados salvos automaticamente. App funciona <strong style={{color:t.text}}>100% offline.</strong></p>
+      </div>
+    </div>
+  );
+}
+
+// ── MAIN APP ──────────────────────────────────────────────────────────────────
+function Verbarium() {
+  const screen = useScreen();
+  const [theme,  setThemeState]  = useState(()=>ld("vb_theme","obsidian"));
+  const [lang,   setLangState]   = useState(()=>ld("vb_lang","pt-BR"));
+  const [dicts,  setDicts]       = useState(()=>ld("vb_dicts",[ESPERANTO]));
+  const [study,  setStudy]       = useState(()=>ld("vb_study",STUDY0));
+  const [actDict,setActDict]     = useState(()=>(ld("vb_dicts",[ESPERANTO])[0]?.id||"esperanto"));
+  const [tab,    setTab]         = useState("home");
+  const [search, setSearch]      = useState("");
+  const [searchAll,setSearchAll] = useState(false);
+  const [fcls,   setFcls]        = useState("all");
+  const [ftag,   setFtag]        = useState("all");
+  const [sortBy, setSortBy]      = useState("alpha");
+  const [eModal,       setEModal]       = useState(false);
+  const [editE,        setEditE]        = useState(null);
+  const [detailEntry,  setDetailEntry]  = useState(null);
+  const [pModal,       setPModal]       = useState(false);
+  const [editP,  setEditP]       = useState(null);
+  const [game,   setGame]        = useState(null);
+  const [drawer, setDrawer]      = useState(false);
+  const [notif,  setNotif]       = useState(null);
+
+  const setTheme = v => { setThemeState(v); sv("vb_theme",v); };
+  const setLang  = v => { setLangState(v);  sv("vb_lang",v);  };
+  useEffect(()=>sv("vb_dicts",dicts),[dicts]);
+  useEffect(()=>sv("vb_study",study),[study]);
+  useEffect(()=>{
+    const today=new Date().toDateString();
+    if(study.lastSession!==today){
+      const yest=new Date(Date.now()-86400000).toDateString();
+      setStudy(s=>({...s,lastSession:today,streak:s.lastSession===yest?(s.streak||0)+1:1}));
+    }
+  },[]); // eslint-disable-line
+
+  const t = THEMES[theme]||THEMES.obsidian;
+  const L = I18N[lang]||I18N["pt-BR"];
+  const dict = dicts.find(d=>d.id===actDict)||dicts[0];
+
+  const notify = (msg,type="ok") => { setNotif({msg,type}); setTimeout(()=>setNotif(null),3500); };
+  const addXP  = n => setStudy(s=>({...s,xp:(s.xp||0)+n}));
+  const addMem = (id,ok) => setStudy(s=>{const cur=s.memScores?.[id]||{c:0,w:0};return{...s,memScores:{...s.memScores,[id]:{c:cur.c+(ok?1:0),w:cur.w+(ok?0:1)}}};});
+  const updDict = upd => setDicts(ds=>ds.map(d=>d.id===actDict?upd:d));
+
+  const allE = searchAll ? dicts.flatMap(d=>d.entries.map(e=>({...e,_dn:d.name}))) : (dict?.entries||[]);
+  const filtered = allE.filter(e=>{
+    const q=search.toLowerCase();
+    return (!q||e.word?.toLowerCase().includes(q)||e.translation?.toLowerCase().includes(q)||e.definition?.toLowerCase().includes(q))
+      && (fcls==="all"||e.class===fcls)
+      && (ftag==="all"||(e.tags||[]).includes(ftag));
+  }).sort((a,b)=>sortBy==="alpha"?a.word.localeCompare(b.word):sortBy==="newest"?new Date(b.created)-new Date(a.created):a.class.localeCompare(b.class));
+  const allTags = [...new Set(allE.flatMap(e=>e.tags||[]))];
+  const level   = Math.floor((study.xp||0)/500)+1;
+  const xpInLvl = (study.xp||0)%500;
+
+  const saveEntry = f => {
+    if(!f.word||!f.translation){ notify("Campos obrigatórios!","err"); return; }
+    if(f.id){ updDict({...dict,entries:dict.entries.map(e=>e.id===f.id?f:e)}); addXP(10); notify("Atualizado! +10 XP ✨"); }
+    else { updDict({...dict,entries:[...dict.entries,{...f,id:Date.now(),created:new Date().toISOString().split("T")[0]}]}); addXP(25); notify("Adicionada! +25 XP 🎉"); }
+    setEModal(false); setEditE(null);
+  };
+  const delEntry = id => { updDict({...dict,entries:dict.entries.filter(e=>e.id!==id)}); setDetailEntry(null); notify("Removida.","info"); };
+  const savePhrase = f => {
+    if(!f.phrase||!f.translation){ notify("Campos obrigatórios!","err"); return; }
+    if(f.id){ updDict({...dict,phrases:(dict.phrases||[]).map(p=>p.id===f.id?f:p)}); }
+    else { updDict({...dict,phrases:[...(dict.phrases||[]),{...f,id:Date.now(),created:new Date().toISOString().split("T")[0]}]}); }
+    addXP(15); notify("Frase salva! +15 XP"); setPModal(false); setEditP(null);
+  };
+
+  const navTo = (id) => { setTab(id); setGame(null); setDrawer(false); };
+  const NAV = [
+    {id:"home",n:"home",lb:L.nav.home},{id:"dictionary",n:"book",lb:L.nav.dict},{id:"phrases",n:"chat",lb:L.nav.phrases},
+    {id:"grammar",n:"rules",lb:L.nav.grammar},{id:"phonology",n:"sound",lb:L.nav.phonology},{id:"lessons",n:"lesson",lb:L.nav.lessons},
+    {id:"games",n:"game",lb:L.nav.games},{id:"achievements",n:"trophy",lb:L.nav.ach},{id:"settings",n:"settings",lb:L.nav.settings},
+  ];
+  const BNAV = [{id:"home",n:"home",lb:L.nav.home},{id:"dictionary",n:"book",lb:L.nav.dict},{id:"games",n:"game",lb:L.nav.games},{id:"lessons",n:"lesson",lb:L.nav.lessons},{id:"settings",n:"settings",lb:L.nav.settings}];
+  const iS = {background:t.inp,border:`1px solid ${t.cb}`,color:t.text,padding:"7px 10px",borderRadius:9,fontFamily:t.fB,fontSize:13,outline:"none",cursor:"pointer"};
+
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display+SC:wght@400;700&family=EB+Garamond:ital,wght@0,400;1,400&family=Lora:ital,wght@0,400;1,400&family=Josefin+Sans:wght@300;400;600&family=Spectral:ital,wght@0,400;1,400&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box;}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+    @keyframes slideRight{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+    @keyframes auroraShift{from{opacity:.7}to{opacity:1;transform:scale(1.03)}}
+    @keyframes cosmicPulse{from{opacity:.6}to{opacity:1}}
+    @keyframes eclipseGlow{from{opacity:.5}to{opacity:.9}}
+    html,body{height:100%;overflow:hidden;}
+    .app{height:100vh;display:flex;flex-direction:column;background:${t.bg};font-family:${t.fB};color:${t.text};overflow:hidden;position:relative;}
+    ${t.sp==="aurora"?`.app::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 20% 30%,rgba(0,200,100,.12),transparent 70%),radial-gradient(ellipse 50% 60% at 80% 60%,rgba(100,0,200,.15),transparent 70%);pointer-events:none;z-index:0;animation:auroraShift 8s ease-in-out infinite alternate;}`:""}
+    ${t.sp==="cosmic"?`.app::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(120,0,200,.15),transparent 50%),radial-gradient(ellipse at 80% 20%,rgba(0,50,200,.15),transparent 50%);pointer-events:none;z-index:0;animation:cosmicPulse 6s ease-in-out infinite alternate;}`:""}
+    ${t.sp==="eclipse"?`.app::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 30% 40%,rgba(180,230,40,.08),transparent 60%),radial-gradient(ellipse at 70% 70%,rgba(80,220,80,.06),transparent 50%);pointer-events:none;z-index:0;animation:eclipseGlow 5s ease-in-out infinite alternate;}`:""}
+    .app>*{position:relative;z-index:1;}
+    .hdr{background:${t.hdr};backdrop-filter:blur(20px);border-bottom:1px solid ${t.cb};padding:0 16px;display:flex;align-items:center;gap:10px;height:56px;flex-shrink:0;}
+    .logo{font-family:${t.fD};font-size:clamp(14px,3vw,19px);color:${t.accent};text-shadow:0 0 18px ${t.ag};white-space:nowrap;flex-shrink:0;letter-spacing:.5px;}
+    .logo sup{font-size:9px;color:${t.muted};font-family:${t.fB};}
+    .hs{flex:1;min-width:0;position:relative;}
+    .hs input{width:100%;background:${t.inp};border:1px solid ${t.cb};color:${t.text};padding:6px 10px 6px 30px;border-radius:9px;font-family:${t.fB};font-size:13px;outline:none;transition:border-color .2s;}
+    .hs input:focus{border-color:${t.accent};}
+    .hs .si{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:${t.muted};}
+    .body{display:flex;flex:1;overflow:hidden;}
+    .sb{width:198px;flex-shrink:0;background:${t.card};border-right:1px solid ${t.cb};display:flex;flex-direction:column;padding:10px 8px;gap:2px;overflow-y:auto;}
+    .ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13px;color:${t.muted};transition:all .15s;border:1px solid transparent;white-space:nowrap;}
+    .ni:hover{background:${t.surf};color:${t.text};}
+    .ni.a{background:${t.ag};color:${t.accent};border-color:${t.cb};}
+    .ssec{font-size:9px;font-family:${t.fD};color:${t.muted};letter-spacing:2px;text-transform:uppercase;padding:8px 10px 3px;margin-top:6px;}
+    .main{flex:1;overflow-y:auto;padding:18px 20px;padding-bottom:${screen.mobile?"80px":"18px"};}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(${screen.mobile?"100%":screen.tablet?"calc(50% - 7px)":"265px"},1fr));gap:12px;}
+    .ec{background:${t.card};border:1px solid ${t.cb};border-radius:14px;padding:14px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;}
+    .ec::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:${t.accent};opacity:0;transition:opacity .18s;}
+    .ec:hover{border-color:${t.accent};transform:translateY(-2px);box-shadow:0 6px 24px ${t.ag};}
+    .ec:hover::before{opacity:1;}
+    .tag{font-size:10px;background:${t.tag};color:${t.tagT};padding:2px 8px;border-radius:20px;}
+    .ibtn{background:${t.surf};border:1px solid ${t.cb};color:${t.muted};width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s;flex-shrink:0;}
+    .ibtn:hover{color:${t.accent};border-color:${t.accent};}
+    .bnav{display:${screen.mobile?"flex":"none"};position:fixed;bottom:0;left:0;right:0;background:${t.hdr};border-top:1px solid ${t.cb};padding:6px 0 env(safe-area-inset-bottom,6px);z-index:100;backdrop-filter:blur(20px);}
+    .bni{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px;cursor:pointer;color:${t.muted};font-size:9px;font-family:${t.fD};letter-spacing:.3px;transition:color .15s;}
+    .bni.a{color:${t.accent};}
+    select option{background:${t.light?"#fff":"#1a1830"};color:${t.text};}
+    ::-webkit-scrollbar{width:3px;height:3px;}
+    ::-webkit-scrollbar-thumb{background:${t.cb};border-radius:3px;}
+    .sab{background:${searchAll?t.accent:t.surf};color:${searchAll?(t.light?"#fff":"#000"):t.muted};border:1px solid ${searchAll?t.accent:t.cb};padding:5px 10px;border-radius:7px;cursor:pointer;font-size:11px;font-family:${t.fB};white-space:nowrap;}
+    .badge{display:flex;align-items:center;gap:4px;background:${t.surf};border:1px solid ${t.cb};padding:4px 8px;border-radius:20px;font-size:11px;white-space:nowrap;}
+  `;
+
+  const SidebarContent = ({onClose}) => (
+    <>
+      {NAV.map(item => (
+        <div key={item.id} className={`ni${tab===item.id?" a":""}`} onClick={()=>navTo(item.id)}>
+          <Ic n={item.n}/><span>{item.lb}</span>
+        </div>
+      ))}
+      <div className="ssec">Conlangs</div>
+      {dicts.map(d => (
+        <div key={d.id} className={`ni${actDict===d.id?" a":""}`} onClick={()=>{setActDict(d.id);navTo("dictionary");}}>
+          <Ic n="globe"/><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{d.name}</span>
+          <span style={{marginLeft:"auto",fontSize:9,background:t.surf,padding:"1px 5px",borderRadius:10}}>{d.entries.length}</span>
+        </div>
+      ))}
+      <div className="ni" style={{color:t.accent}} onClick={()=>{
+        const nm=prompt("Nome do novo idioma:");
+        if(!nm) return;
+        const nd={id:nm.toLowerCase().replace(/\s+/g,"_")+"_"+Date.now(),name:nm,description:"",author:"",entries:[],phrases:[],lessons:[],grammar:{morphology:"",syntax:"",writingSystem:"",custom:[]},phonology:{usedConsonants:[],usedVowels:[],toneSystem:"",notes:""}};
+        setDicts(ds=>[...ds,nd]); setActDict(nd.id); navTo("dictionary"); notify(`"${nm}" criado! 🌍`);
+      }}>
+        <Ic n="plus"/><span>Novo Idioma</span>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <style>{css}</style>
+
+```
+  <div className="app">
+
+    {/* ── HEADER */}
+    <div className="hdr">
+      {screen.mobile && <button className="ibtn" onClick={()=>setDrawer(true)}><Ic n="menu"/></button>}
+      <div className="logo">Verbarium <sup>PRO</sup></div>
+      <div className="hs">
+        <span className="si"><Ic n="search" sz={14}/></span>
+        <input value={search} onChange={e=>{setSearch(e.target.value);setTab("dictionary");}} placeholder={L.ui.search}/>
+      </div>
+      <button className="sab" onClick={()=>setSearchAll(s=>!s)}>{searchAll?L.ui.allD:L.ui.thisD}</button>
+      {!screen.mobile && (
+        <>
+          <div className="badge" style={{color:"#ff9040"}}>🔥 {study.streak||0} {L.ui.streak}</div>
+          <div className="badge"><span style={{color:t.accent,fontFamily:t.fD}}>Nv.{level}</span><span style={{color:t.muted}}>{xpInLvl}/500XP</span></div>
+        </>
+      )}
+    </div>
+
+    {/* ── BODY */}
+    <div className="body">
+
+      {/* SIDEBAR */}
+      {!screen.mobile && (
+        <div className="sb">
+          <SidebarContent/>
+        </div>
+      )}
+
+      {/* ── MAIN CONTENT */}
+      <div className="main">
+
+        {/* HOME */}
+        {tab==="home" && (
+          <div>
+            <div style={{textAlign:"center",padding:"28px 16px 22px"}}>
+              <div style={{display:"inline-flex",alignItems:"center",gap:5,background:t.ag,border:`1px solid ${t.cb}`,padding:"3px 12px",borderRadius:20,fontSize:10,fontFamily:t.fD,color:t.accent,letterSpacing:1,marginBottom:12}}>⚡ Verbarium PRO</div>
+              <h1 style={{fontFamily:t.fD,fontSize:"clamp(22px,5vw,42px)",color:t.accent,textShadow:`0 0 30px ${t.ag}`,marginBottom:8,lineHeight:1.2}}>O Seu Léxico Vivo</h1>
+              <p style={{color:t.muted,fontSize:15,maxWidth:440,margin:"0 auto 20px",fontStyle:"italic"}}>Crie, organize e ensine qualquer língua construída.</p>
+              <button style={{display:"inline-flex",alignItems:"center",gap:6,padding:"9px 20px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:10,cursor:"pointer",fontFamily:t.fB,fontSize:14,fontWeight:600}} onClick={()=>{setTab("dictionary");setEModal(true);}}>
+                <Ic n="plus"/>{L.btn.add}
+              </button>
+            </div>
+            <div style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:14,padding:16,marginBottom:16}}>
+              <div style={{fontFamily:t.fD,color:t.accent,fontSize:10,letterSpacing:1,marginBottom:7}}>⚡ {L.ui.level} {level}</div>
+              <div style={{background:t.surf,borderRadius:99,height:7,overflow:"hidden",marginBottom:5}}>
+                <div style={{height:"100%",width:`${(xpInLvl/500)*100}%`,background:`linear-gradient(90deg,${t.accent}99,${t.accent})`,borderRadius:99,boxShadow:`0 0 10px ${t.ag}`,transition:"width .6s"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:t.muted}}><span>{xpInLvl}/500 XP</span><span>{500-xpInLvl} {L.ui.xpNext}</span></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))",gap:10,marginBottom:20}}>
+              {[["📖",dicts.reduce((a,d)=>a+d.entries.length,0),L.ui.words],["💬",dicts.reduce((a,d)=>a+(d.phrases||[]).length,0),"Frases"],["🌍",dicts.length,L.ui.langs],["🔥",study.streak||0,L.ui.streak],["📚",(dict?.lessons||[]).length,L.ui.lessons],["⭐",level,L.ui.level]].map(([ic,v,lb])=>(
+                <div key={lb} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:12,textAlign:"center"}}>
+                  <div style={{fontSize:22,marginBottom:3}}>{ic}</div>
+                  <div style={{fontFamily:t.fD,fontSize:22,color:t.accent,lineHeight:1}}>{v}</div>
+                  <div style={{fontSize:10,color:t.muted,marginTop:2}}>{lb}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontFamily:t.fD,color:t.accent,fontSize:10,letterSpacing:1,marginBottom:10}}>📖 ÚLTIMAS ENTRADAS</div>
+            <div className="grid">
+              {[...allE].reverse().slice(0,3).map(e => (
+                <div key={e.id} className="ec" onClick={()=>{setDetailEntry(e);setTab("dictionary");}}>
+                  {e.image && <img src={e.image} alt="" style={{width:"100%",height:72,objectFit:"cover",borderRadius:8,marginBottom:8}} onError={er=>er.target.style.display="none"}/>}
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <div style={{fontFamily:t.fD,fontSize:16,color:t.accent}}>{e.word}</div>
+                    {e.audio && <span style={{color:t.accent,fontSize:13}}>🔊</span>}
+                  </div>
+                  <div style={{fontSize:11,color:t.muted,fontStyle:"italic"}}>{e.pronunciation}</div>
+                  <div style={{fontSize:13,color:t.text,margin:"4px 0"}}>{e.translation}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>{(e.tags||[]).map(tag=><span key={tag} className="tag">{tag}</span>)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* DICTIONARY */}
+        {tab==="dictionary" && !game && (
+          <div>
+            <div style={{marginBottom:14}}>
+              <h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent}}>{searchAll?"Busca Global":dict?.name}</h2>
+              <p style={{color:t.muted,fontSize:12,marginBottom:12}}>{searchAll?`${filtered.length} resultados`:(dict?.description||"")}</p>
+            </div>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:14,alignItems:"center"}}>
+              <select style={iS} value={fcls} onChange={e=>setFcls(e.target.value)}><option value="all">Todas as classes</option>{WC.map(c=><option key={c}>{c}</option>)}</select>
+              <select style={iS} value={ftag} onChange={e=>setFtag(e.target.value)}><option value="all">Todas as tags</option>{allTags.map(tag=><option key={tag}>{tag}</option>)}</select>
+              <select style={iS} value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="alpha">A → Z</option><option value="newest">Mais recente</option><option value="class">Por classe</option></select>
+              <button style={{display:"flex",alignItems:"center",gap:5,padding:"7px 14px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,fontWeight:600,marginLeft:"auto"}} onClick={()=>setEModal(true)}>
+                <Ic n="plus"/>{L.btn.add}
+              </button>
+            </div>
+            {filtered.length===0 ? (
+              <div style={{textAlign:"center",padding:60,color:t.muted}}>
+                <div style={{fontSize:40,marginBottom:10}}>📭</div>
+                <p style={{fontStyle:"italic",marginBottom:16}}>Nenhuma palavra encontrada.</p>
+                <button style={{padding:"8px 18px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13}} onClick={()=>setEModal(true)}>{L.btn.add}</button>
+              </div>
+            ) : (
+              <div className="grid">
+                {filtered.map(e => {
+                  const mem=study.memScores?.[e.id];
+                  const memPct=mem?(Math.round(mem.c/(mem.c+mem.w)*100)):null;
+                  return (
+                    <div key={e.id+(e._dn||"")} className="ec" onClick={()=>setDetailEntry(e)}>
+                      {e.image && <img src={e.image} alt="" style={{width:"100%",height:65,objectFit:"cover",borderRadius:8,marginBottom:8}} onError={er=>er.target.style.display="none"}/>}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                        <div style={{fontFamily:t.fD,fontSize:16,color:t.accent}}>{e.word}</div>
+                        {e.audio && <span style={{color:t.accent,fontSize:13}}>🔊</span>}
+                      </div>
+                      <div style={{fontSize:11,color:t.muted,fontStyle:"italic"}}>{e.pronunciation}</div>
+                      <span style={{display:"inline-block",fontSize:9,background:t.surf,color:t.muted,padding:"1px 7px",borderRadius:5,margin:"4px 0 6px",border:`1px solid ${t.cb}`}}>{e.class}</span>
+                      <div style={{fontSize:13,color:t.text,marginBottom:4}}>{e.translation}</div>
+                      <div style={{fontSize:11,color:t.muted,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{e.definition}</div>
+                      {memPct!==null && (
+                        <div style={{marginTop:8}}>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:t.muted,marginBottom:2}}><span>{L.ui.mem}</span><span>{memPct}%</span></div>
+                          <div style={{background:t.surf,borderRadius:99,height:3,overflow:"hidden"}}>
+                            <div style={{width:`${memPct}%`,height:"100%",background:memPct>70?"#22c55e":memPct>40?"#f59e0b":"#ef4444",borderRadius:99,transition:"width .5s"}}/>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:8}}>{(e.tags||[]).map(tag=><span key={tag} className="tag">{tag}</span>)}</div>
+                      {e._dn && <div style={{fontSize:9,color:t.accent,marginTop:5,fontFamily:t.fD}}>📖 {e._dn}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PHRASES */}
+        {tab==="phrases" && (
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18,flexWrap:"wrap",gap:10}}>
+              <div><h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent}}>{L.nav.phrases}</h2><p style={{color:t.muted,fontSize:12}}>{dict.name} — {(dict.phrases||[]).length} frases</p></div>
+              <button style={{display:"flex",alignItems:"center",gap:5,padding:"8px 14px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,fontWeight:600}} onClick={()=>setPModal(true)}>
+                <Ic n="plus"/>{L.btn.phrase}
+              </button>
+            </div>
+            {(dict.phrases||[]).length===0 ? (
+              <div style={{textAlign:"center",padding:50,color:t.muted}}>
+                <div style={{fontSize:40,marginBottom:10}}>💬</div>
+                <p style={{fontStyle:"italic",marginBottom:16}}>Adicione frases de exemplo!</p>
+                <button style={{padding:"8px 18px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13}} onClick={()=>setPModal(true)}>{L.btn.phrase}</button>
+              </div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {(dict.phrases||[]).map(p => (
+                  <div key={p.id} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:12,padding:16}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:t.fD,fontSize:16,color:t.accent,marginBottom:3}}>{p.phrase}</div>
+                        <div style={{fontSize:13,color:t.text,marginBottom:6,fontStyle:"italic"}}>{p.translation}</div>
+                        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                          <span style={{fontSize:10,background:t.surf,padding:"2px 8px",borderRadius:20,color:t.muted,border:`1px solid ${t.cb}`}}>{p.context}</span>
+                          {(p.tags||[]).map(tag=><span key={tag} className="tag">{tag}</span>)}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:5,flexShrink:0}}>
+                        {p.audio && <button style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",background:t.surf,color:t.accent,border:`1px solid ${t.cb}`,borderRadius:7,cursor:"pointer",fontFamily:t.fB,fontSize:11}} onClick={()=>new Audio(p.audio).play()}><Ic n="play" sz={12}/>{L.btn.listen}</button>}
+                        <button className="ibtn" onClick={()=>{setEditP(p);setPModal(true);}}><Ic n="edit" sz={14}/></button>
+                        <button className="ibtn" style={{color:"#ef4444",borderColor:"rgba(239,68,68,.3)"}} onClick={()=>updDict({...dict,phrases:(dict.phrases||[]).filter(x=>x.id!==p.id)})}><Ic n="trash" sz={14}/></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* GRAMMAR */}
+        {tab==="grammar" && <GramSection dict={dict} onChange={g=>updDict({...dict,grammar:g})} t={t}/>}
+
+        {/* PHONOLOGY */}
+        {tab==="phonology" && <PhonSection dict={dict} onChange={ph=>updDict({...dict,phonology:ph})} t={t}/>}
+
+        {/* LESSONS */}
+        {tab==="lessons" && <LessonSection dict={dict} onUpdate={updDict} study={study} onStudyUpdate={setStudy} notify={notify} t={t} L={L}/>}
+
+        {/* GAMES LIST */}
+        {tab==="games" && !game && (
+          <div>
+            <h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent,marginBottom:4}}>{L.nav.games}</h2>
+            <p style={{color:t.muted,fontSize:13,marginBottom:20}}>Treine com seu próprio vocabulário</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:14}}>
+              {[
+                {id:"flash",ic:"🃏",lb:L.game.flash,desc:"Vire o cartão e avalie se sabia a tradução.",min:2,xp:8},
+                {id:"match",ic:"🔗",lb:L.game.match,desc:"Ligue palavras às suas traduções corretas.",min:4,xp:10},
+                {id:"findT",ic:"🎯",lb:L.game.findT,desc:"Veja a palavra, escolha a tradução certa entre 4.",min:4,xp:10},
+                {id:"findW",ic:"🔎",lb:L.game.findW,desc:"Veja a tradução, identifique a palavra na conlang.",min:4,xp:10},
+                {id:"mixed",ic:"🔀",lb:L.game.mixed,desc:"Monte a palavra clicando nas letras embaralhadas.",min:3,xp:15},
+                {id:"cross",ic:"📐",lb:L.game.cross,desc:"Preencha o tabuleiro de palavras cruzadas.",min:3,xp:40},
+              ].map(g => (
+                <div key={g.id} style={{background:t.card,border:`1px solid ${t.cb}`,borderRadius:16,padding:20,cursor:"pointer",textAlign:"center",transition:"all .22s"}}
+                  onClick={()=>{ if(allE.length<g.min){notify(`Mínimo ${g.min} palavras para jogar.`,"info");return;} setGame(g.id); }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=t.accent;e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 10px 30px ${t.ag}`;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=t.cb;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+                  <div style={{fontSize:36,marginBottom:10}}>{g.ic}</div>
+                  <h3 style={{fontFamily:t.fD,fontSize:14,color:t.accent,marginBottom:6}}>{g.lb}</h3>
+                  <p style={{fontSize:12,color:t.muted,lineHeight:1.5,marginBottom:8}}>{g.desc}</p>
+                  <span style={{fontSize:10,background:t.surf,padding:"2px 8px",borderRadius:20,color:t.muted,border:`1px solid ${t.cb}`}}>+{g.xp} XP</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {tab==="games" && game==="flash" && <FlashGame entries={allE} onBack={()=>setGame(null)} onXP={addXP} t={t} L={L} onMem={addMem}/>}
+        {tab==="games" && game==="match" && <MatchGame entries={allE} onBack={()=>setGame(null)} onXP={addXP} t={t} L={L}/>}
+        {tab==="games" && game==="findT" && <FindGame entries={allE} onBack={()=>setGame(null)} onXP={addXP} t={t} L={L} reverse={false}/>}
+        {tab==="games" && game==="findW" && <FindGame entries={allE} onBack={()=>setGame(null)} onXP={addXP} t={t} L={L} reverse={true}/>}
+        {tab==="games" && game==="mixed" && <MixedGame entries={allE} onBack={()=>setGame(null)} onXP={addXP} t={t} L={L}/>}
+        {tab==="games" && game==="cross" && <CrossGame entries={allE} onBack={()=>setGame(null)} onXP={addXP} t={t} L={L}/>}
+
+        {/* ACHIEVEMENTS */}
+        {tab==="achievements" && (
+          <div>
+            <h2 style={{fontFamily:t.fD,fontSize:20,color:t.accent,marginBottom:4}}>{L.nav.ach}</h2>
+            <p style={{color:t.muted,fontSize:12,marginBottom:18}}>Seu progresso como criador de línguas</p>
+            {[
+              {ic:"🌱",nm:"Primeira Palavra",desc:"Adicionou a primeira palavra",done:allE.length>=1},
+              {ic:"📚",nm:"Lexicógrafo",desc:"10 palavras no dicionário",done:allE.length>=10},
+              {ic:"🔥",nm:"Sequência Ardente",desc:"7 dias seguidos de estudo",done:(study.streak||0)>=7},
+              {ic:"🎵",nm:"Voz da Língua",desc:"Gravou áudio de uma palavra",done:allE.some(e=>e.audio)},
+              {ic:"🖼️",nm:"Ilustrado",desc:"Adicionou imagem a uma palavra",done:allE.some(e=>e.image)},
+              {ic:"💬",nm:"Contador de Histórias",desc:"5 frases no fraseário",done:(dict.phrases||[]).length>=5},
+              {ic:"📖",nm:"Gramático",desc:"Preencheu a seção de morfologia",done:!!(dict.grammar?.morphology?.length>20)},
+              {ic:"🔬",nm:"Fonólogo",desc:"Selecionou 10+ fonemas IPA",done:((dict.phonology?.usedConsonants||[]).length+(dict.phonology?.usedVowels||[]).length)>=10},
+              {ic:"🎓",nm:"Mestre das Lições",desc:"Concluiu uma lição",done:Object.values(study.lessonProgress||{}).some(p=>p.completed)},
+              {ic:"✨",nm:"Nível 3",desc:"Alcançou o nível 3",done:level>=3},
+              {ic:"🌍",nm:"Poliglota",desc:"Criou 2+ idiomas",done:dicts.length>=2},
+              {ic:"🎯",nm:"Taxônomo",desc:"Criou 10 tags únicas",done:allTags.length>=10},
+            ].map(a => (
+              <div key={a.nm} style={{display:"flex",alignItems:"center",gap:12,background:t.card,border:`1px solid ${a.done?"rgba(34,197,94,.35)":t.cb}`,borderRadius:11,padding:12,marginBottom:7,opacity:a.done?1:.45}}>
+                <div style={{fontSize:24}}>{a.ic}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:t.fD,fontSize:12,color:a.done?"#22c55e":t.accent}}>{a.nm} {a.done&&"✓"}</div>
+                  <div style={{fontSize:11,color:t.muted,marginTop:1}}>{a.desc}</div>
+                </div>
+                {a.done && <span style={{color:"#22c55e",fontSize:18}}>⭐</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* SETTINGS */}
+        {tab==="settings" && (
+          <SettSection dict={dict} theme={theme} setTheme={setTheme} lang={lang} setLang={setLang} onImport={imp=>updDict(mergeDict(dict,imp))} t={t} L={L} notify={notify}/>
+        )}
+
+      </div>
+    </div>
+
+    {/* ── BOTTOM NAV (mobile) */}
+    <div className="bnav">
+      {BNAV.map(item => (
+        <div key={item.id} className={`bni${tab===item.id?" a":""}`} onClick={()=>navTo(item.id)}>
+          <span style={{display:"block",width:20,height:20}}>{SVG[item.n]}</span>
+          {item.lb}
+        </div>
+      ))}
+    </div>
+
+    {/* ── MOBILE DRAWER */}
+    {drawer && (
+      <div style={{position:"fixed",inset:0,zIndex:200,display:"flex"}}>
+        <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.6)"}} onClick={()=>setDrawer(false)}/>
+        <div style={{position:"relative",width:260,height:"100%",background:t.light?"#faf4e8":"#0f0d18",backgroundImage:t.bg,borderRight:`1px solid ${t.cb}`,padding:"16px 10px",overflowY:"auto",animation:"slideRight .2s"}}>
+          <div style={{fontFamily:t.fD,fontSize:15,color:t.accent,marginBottom:14,paddingBottom:10,borderBottom:`1px solid ${t.cb}`}}>Verbarium <sup style={{fontSize:9,color:t.muted}}>PRO</sup></div>
+          <SidebarContent onClose={()=>setDrawer(false)}/>
+          <div style={{marginTop:16,padding:"12px",background:t.surf,borderRadius:12,border:`1px solid ${t.cb}`}}>
+            <div style={{fontSize:9,fontFamily:t.fD,color:t.muted,letterSpacing:1,marginBottom:6}}>PROGRESSO</div>
+            <div style={{display:"flex",gap:8,marginBottom:6}}><span style={{color:"#ff9040",fontSize:12}}>🔥 {study.streak||0} {L.ui.streak}</span><span style={{color:t.accent,fontFamily:t.fD,fontSize:12}}>Nv.{level}</span></div>
+            <div style={{background:t.card,borderRadius:99,height:4,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${(xpInLvl/500)*100}%`,background:t.accent,borderRadius:99}}/>
+            </div>
+            <div style={{fontSize:10,color:t.muted,marginTop:4}}>{xpInLvl}/500 XP</div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── ENTRY DETAIL MODAL */}
+    {detailEntry && (
+      <Modal onClose={()=>setDetailEntry(null)} title={`📖 ${dict?.name}`} t={t} wide>
+        {detailEntry.image && <img src={detailEntry.image} alt="" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:12,marginBottom:14}} onError={e=>e.target.style.display="none"}/>}
+        <div style={{fontFamily:t.fD,fontSize:28,color:t.accent,textShadow:`0 0 20px ${t.ag}`}}>{detailEntry.word}</div>
+        <div style={{fontSize:14,color:t.muted,fontStyle:"italic",margin:"3px 0 6px"}}>{detailEntry.pronunciation}</div>
+        <span style={{display:"inline-block",fontSize:10,background:t.surf,border:`1px solid ${t.cb}`,padding:"2px 10px",borderRadius:7,color:t.muted,marginBottom:14}}>{detailEntry.class}</span>
+        {[["Tradução",<span style={{color:t.accent,fontSize:17}}>{detailEntry.translation}</span>],["Definição",detailEntry.definition],["Etimologia",detailEntry.etymology],["Notas",detailEntry.notes]].map(([lb,val])=>val&&(
+          <div key={lb} style={{marginBottom:12}}>
+            <div style={{fontSize:9,fontFamily:t.fD,color:t.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>{lb}</div>
+            <div style={{fontSize:14,lineHeight:1.6,color:t.text}}>{val}</div>
+          </div>
+        ))}
+        {(detailEntry.roots||[]).length>0 && (
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:9,fontFamily:t.fD,color:t.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Raízes & Afixos</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{detailEntry.roots.map(r=><span key={r} style={{background:t.ag,border:`1px solid ${t.cb}`,color:t.accent,padding:"3px 10px",borderRadius:7,fontFamily:t.fD,fontSize:12}}>{r}</span>)}</div>
+          </div>
+        )}
+        {(detailEntry.examples||[]).filter(Boolean).length>0 && (
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:9,fontFamily:t.fD,color:t.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Exemplos</div>
+            {detailEntry.examples.filter(Boolean).map((ex,i)=><div key={i} style={{background:t.surf,borderLeft:`3px solid ${t.accent}`,padding:"8px 12px",borderRadius:"0 9px 9px 0",fontSize:13,fontStyle:"italic",marginBottom:6}}>{ex}</div>)}
+          </div>
+        )}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:9,fontFamily:t.fD,color:t.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Áudio</div>
+          <AudioRec existing={detailEntry.audio} onSave={v=>{const u={...detailEntry,audio:v};updDict({...dict,entries:dict.entries.map(e=>e.id===u.id?u:e)});setDetailEntry(u);}} accent={t.accent}/>
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:16}}>{(detailEntry.tags||[]).map(tag=><span key={tag} className="tag">{tag}</span>)}</div>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+          <button style={{display:"flex",alignItems:"center",gap:5,padding:"8px 16px",background:t.accent,color:t.light?"#fff":"#000",border:"none",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13,fontWeight:600}} onClick={()=>{setEditE(detailEntry);setDetailEntry(null);setEModal(true);}}>
+            <Ic n="edit"/>{L.btn.edit}
+          </button>
+          <button style={{display:"flex",alignItems:"center",gap:5,padding:"8px 12px",background:"rgba(239,68,68,.1)",color:"#ef4444",border:"1px solid rgba(239,68,68,.25)",borderRadius:9,cursor:"pointer",fontFamily:t.fB,fontSize:13}} onClick={()=>delEntry(detailEntry.id)}>
+            <Ic n="trash"/>{L.btn.del}
+          </button>
+        </div>
+      </Modal>
+    )}
+
+    {/* ── ENTRY FORM MODAL */}
+    {eModal && (
+      <Modal onClose={()=>{setEModal(false);setEditE(null);}} title={editE?"✏️ Editar Entrada":"✨ Nova Palavra"} t={t} wide>
+        <EntryForm entry={editE} onSave={saveEntry} onCancel={()=>{setEModal(false);setEditE(null);}} t={t}/>
+      </Modal>
+    )}
+
+    {/* ── PHRASE FORM MODAL */}
+    {pModal && (
+      <Modal onClose={()=>{setPModal(false);setEditP(null);}} title={editP?"✏️ Editar Frase":"💬 Nova Frase"} t={t}>
+        <PhraseForm phrase={editP} onSave={savePhrase} onCancel={()=>{setPModal(false);setEditP(null);}} t={t} L={L}/>
+      </Modal>
+    )}
+
+    {/* ── NOTIFICATION */}
+    {notif && (
+      <div style={{position:"fixed",bottom:screen.mobile?"88px":"22px",right:16,background:t.light?"#fff":"#15121f",border:`1px solid ${t.accent}`,color:t.text,padding:"11px 16px",borderRadius:11,fontSize:13,zIndex:500,animation:"slideUp .2s",boxShadow:`0 8px 24px rgba(0,0,0,.3)`,maxWidth:300,display:"flex",alignItems:"center",gap:8}}>
+        {notif.type==="err"?"❌":notif.type==="info"?"ℹ️":"✅"} {notif.msg}
+      </div>
+    )}
+
+  </div>
+</>
+```
+
+);
+}
+
+```
+// ── MOUNT ──────────────────────────────────────────────────────────────────
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(Verbarium));
+
+// Hide splash after render
+requestAnimationFrame(() => {
+  setTimeout(() => {
+    const splash = document.getElementById('splash');
+    if (splash) { splash.style.opacity = '0'; setTimeout(() => splash.remove(), 500); }
+  }, 800);
+});
+```
+
+  </script>
+</body>
+</html>
