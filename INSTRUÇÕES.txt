@@ -1,0 +1,156 @@
+════════════════════════════════════════════════════════════
+  VERBARIUM PRO — GUIA DE PUBLICAÇÃO E APK
+  Do upload ao celular em ~15 minutos
+════════════════════════════════════════════════════════════
+
+
+📁 ESTRUTURA DOS ARQUIVOS (não mova nem renomeie)
+────────────────────────────────────────────────
+verbarium-pwa/
+├── index.html        ← O app completo
+├── manifest.json     ← Configuração PWA
+├── sw.js             ← Service Worker (offline)
+└── icons/
+    ├── icon-72.png
+    ├── icon-96.png
+    ├── icon-128.png
+    ├── icon-144.png
+    ├── icon-152.png
+    ├── icon-192.png
+    ├── icon-384.png
+    └── icon-512.png
+
+
+════════════════════════════════════════════════════════════
+  PASSO 1 — PUBLICAR NO CLOUDFLARE PAGES (gratuito)
+════════════════════════════════════════════════════════════
+
+Opção A — Upload Direto (mais simples, sem GitHub)
+──────────────────────────────────────────────────
+1. Acesse: https://pages.cloudflare.com
+2. Clique em "Create a project"
+3. Escolha "Direct Upload"
+4. Dê um nome ao projeto (ex: verbarium-pro)
+5. Faça upload da PASTA inteira "verbarium-pwa/"
+   (arraste a pasta ou selecione todos os arquivos)
+6. Clique "Deploy site"
+7. Aguarde ~30 segundos
+8. Seu link ficará assim:
+   https://verbarium-pro.pages.dev
+
+✅ Pronto! O app está online com HTTPS automático.
+
+
+Opção B — Via GitHub (recomendado para atualizações fáceis)
+────────────────────────────────────────────────────────────
+1. Crie conta em: https://github.com
+2. Crie repositório público chamado "verbarium-pwa"
+3. Faça upload de todos os arquivos da pasta
+4. Acesse: https://pages.cloudflare.com
+5. "Create project" → "Connect to Git" → Selecione o repo
+6. Build settings: deixe tudo em branco
+7. Clique "Save and Deploy"
+
+Vantagem: quando quiser atualizar o app, só envie
+os novos arquivos para o GitHub e o Cloudflare
+atualiza automaticamente.
+
+
+════════════════════════════════════════════════════════════
+  PASSO 2 — INSTALAR COMO APP NO CELULAR (PWA)
+════════════════════════════════════════════════════════════
+
+Android (Chrome):
+─────────────────
+1. Abra o link no Chrome
+2. Aguarde 30 segundos de uso
+3. Aparece banner "Adicionar à tela inicial"
+   OU toque no menu (⋮) → "Adicionar à tela inicial"
+4. Confirme → Ícone aparece na tela inicial
+5. Abre como app, tela cheia, sem barra do navegador ✓
+
+iPhone (Safari):
+────────────────
+1. Abra o link no Safari (não no Chrome!)
+2. Toque no botão Compartilhar (□↑)
+3. Role e toque em "Adicionar à Tela de Início"
+4. Confirme o nome "Verbarium PRO"
+5. Ícone aparece na tela inicial ✓
+
+
+════════════════════════════════════════════════════════════
+  PASSO 3 — GERAR APK PARA ANDROID (opcional)
+════════════════════════════════════════════════════════════
+
+Usando PWABuilder (gratuito, da Microsoft):
+───────────────────────────────────────────
+1. Acesse: https://www.pwabuilder.com
+2. Cole sua URL: https://verbarium-pro.pages.dev
+3. Clique "Start"
+4. Aguarde a análise (30-60 segundos)
+5. Clique "Package for stores"
+6. Escolha "Android" → "Generate Package"
+7. Baixe o arquivo .apk ou .aab
+8. Instale no Android via:
+   - Enviar por WhatsApp/email para si mesmo
+   - Habilitar "Fontes desconhecidas" no Android
+   - Abrir o .apk para instalar
+
+Nota: Para publicar na Google Play Store, você
+precisará de uma conta de desenvolvedor ($25 único).
+Para uso pessoal, o .apk direto é suficiente.
+
+
+════════════════════════════════════════════════════════════
+  PASSO 4 — TESTAR OFFLINE
+════════════════════════════════════════════════════════════
+
+1. Abra o app pelo ícone na tela inicial
+2. Use por alguns minutos (para o SW cachear tudo)
+3. Ative o Modo Avião no celular
+4. Reabra o app
+
+✅ Deve carregar normalmente sem internet!
+
+Na primeira abertura o app precisa de internet para
+baixar React e as fontes. Após isso, funciona offline.
+
+
+════════════════════════════════════════════════════════════
+  ATUALIZAR O APP NO FUTURO
+════════════════════════════════════════════════════════════
+
+Quando quiser lançar uma nova versão:
+
+1. Edite o arquivo sw.js
+2. Mude a linha:
+   const CACHE_VERSION = 'verbarium-v1.0.0';
+   para:
+   const CACHE_VERSION = 'verbarium-v1.1.0';
+
+3. Faça upload dos arquivos atualizados no Cloudflare
+4. Todos os usuários receberão a atualização
+   automaticamente na próxima vez que abrirem o app
+
+
+════════════════════════════════════════════════════════════
+  LINKS ÚTEIS
+════════════════════════════════════════════════════════════
+
+Cloudflare Pages:  https://pages.cloudflare.com
+PWABuilder:        https://www.pwabuilder.com
+GitHub:            https://github.com
+Teste PWA:         https://web.dev/measure/
+
+
+════════════════════════════════════════════════════════════
+  DÚVIDAS?
+════════════════════════════════════════════════════════════
+
+O Service Worker (sw.js) usa estratégia Offline-First:
+• Cache primeiro, rede depois (stale-while-revalidate)
+• CDN assets cacheados na primeira visita
+• Funciona sem internet após o primeiro carregamento
+• Cache versionado: nova versão limpa o cache antigo
+
+════════════════════════════════════════════════════════════
