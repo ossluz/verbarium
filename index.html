@@ -4630,20 +4630,75 @@ function ThemeEditor({
 function parseRawText(text) {
   const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
   const entries = [];
+  const today = new Date().toISOString().split('T')[0];
+  const make = (word, trans, cls, pron, etym, def, tags, notes, ex) => ({
+    word: word.trim(),
+    translation: trans.trim(),
+    class: cls || 'substantivo',
+    pronunciation: pron || '',
+    etymology: etym || '',
+    definition: def || '',
+    examples: ex ? [ex] : [],
+    tags: tags || [],
+    roots: [],
+    notes: notes || '',
+    audio: null,
+    image: null,
+    created: today
+  });
   for (const line of lines) {
-    // Formats supported:
-    // word = translation
-    // word - translation
-    // word | translation | class | pronunciation
-    // word : translation
+    if (!line || line.startsWith('#') && line.length < 3) continue;
+
+    // ── Markdown definition list: **word** — translation
+    let m = line.match(/^\*\*(.+?)\*\*\s*[—\-:=|]\s*(.+)$/);
+    if (m) {
+      entries.push(make(m[1], m[2]));
+      continue;
+    }
+
+    // ── Markdown table row: | word | translation | class | pron |
+    m = line.match(/^\|(.+)\|$/);
+    if (m) {
+      const cols = m[1].split('|').map(c => c.trim()).filter(Boolean);
+      if (cols.length >= 2 && !/^[-:]+$/.test(cols[0])) {
+        entries.push(make(cols[0], cols[1], cols[2], cols[3], '', '', cols[4] ? cols[4].split(',').map(t => t.trim()) : []));
+        continue;
+      }
+    }
+
+    // ── WordTheme export format: word;translation;class;notes
+    m = line.match(/^([^;]+);([^;]+);?([^;]*);?([^;]*)$/);
+    if (m && m[1] && m[2] && !line.includes('=')) {
+      entries.push(make(m[1], m[2], m[3] || 'substantivo', '', '', '', []));
+      continue;
+    }
+
+    // ── Standard: word = translation | class | pron | def
     const sep = /\s*[=|\-:]\s*/;
     const parts = line.split(sep).map(p => p.trim()).filter(Boolean);
     if (parts.length >= 2) {
-      entries.push({
-        word: parts[0],
-        translation: parts[1],
-        class: parts[2] || 'substantivo',
-        pronunciation: parts[3] || '',
+      entries.push(make(parts[0], parts[1], parts[2], parts[3], '', parts[4], [], parts[5]));
+    }
+  }
+  return entries;
+}
+function parseMarkdown(text) {
+  // Parse full markdown dictionary document
+  const entries = [];
+  const today = new Date().toISOString().split('T')[0];
+  const lines = text.split(/\n/);
+  let currentWord = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    // H2/H3 as word headings: ## ami or ### ami
+    let m = line.match(/^#{1,4}\s+(.+)$/);
+    if (m && !m[1].includes(' ')) {
+      if (currentWord) entries.push(currentWord);
+      currentWord = {
+        word: m[1],
+        translation: '',
+        class: 'substantivo',
+        pronunciation: '',
         etymology: '',
         definition: '',
         examples: [],
@@ -4652,11 +4707,70 @@ function parseRawText(text) {
         notes: '',
         audio: null,
         image: null,
-        created: new Date().toISOString().split('T')[0]
-      });
+        created: today
+      };
+      continue;
+    }
+    if (!currentWord) {
+      entries.push(...parseRawText(line));
+      continue;
+    }
+    // Bold label: **Tradução:** value
+    m = line.match(/^\*\*(Tradução|Translation|Meaning)[:\s*]+\*\*\s*(.+)/i) || line.match(/^Tradução[:\s]+(.+)/i);
+    if (m) {
+      currentWord.translation = m[m.length - 1];
+      continue;
+    }
+    m = line.match(/^\*\*(Classe|Class|Type)[:\s*]+\*\*\s*(.+)/i);
+    if (m) {
+      currentWord.class = m[2];
+      continue;
+    }
+    m = line.match(/^\*\*(Pronúncia|Pronunciation|IPA)[:\s*]+\*\*\s*(.+)/i);
+    if (m) {
+      currentWord.pronunciation = m[2];
+      continue;
+    }
+    m = line.match(/^\*\*(Etimologia|Etymology)[:\s*]+\*\*\s*(.+)/i);
+    if (m) {
+      currentWord.etymology = m[2];
+      continue;
+    }
+    m = line.match(/^\*\*(Definição|Definition)[:\s*]+\*\*\s*(.+)/i);
+    if (m) {
+      currentWord.definition = m[2];
+      continue;
+    }
+    m = line.match(/^\*\*(Notas?|Notes?)[:\s*]+\*\*\s*(.+)/i);
+    if (m) {
+      currentWord.notes = m[2];
+      continue;
+    }
+    m = line.match(/^\*\*(Tags?)[:\s*]+\*\*\s*(.+)/i);
+    if (m) {
+      currentWord.tags = m[2].split(/[,;]/).map(t => t.trim()).filter(Boolean);
+      continue;
+    }
+    // Bullet example: - Frase de exemplo
+    m = line.match(/^[-*]\s+(.+)$/);
+    if (m && currentWord.translation) {
+      currentWord.examples.push(m[1]);
+      continue;
+    }
+    // Plain translation on next line after heading
+    if (!currentWord.translation && line && !line.startsWith('#') && !line.startsWith('*')) {
+      if (line.includes('—') || line.includes(':') || line.includes('=')) {
+        const p = line.split(/[—:=]/).map(s => s.trim());
+        if (p.length >= 2) {
+          currentWord.translation = p[1];
+        }
+      } else if (!currentWord.definition) {
+        currentWord.translation = line;
+      }
     }
   }
-  return entries;
+  if (currentWord && currentWord.translation) entries.push(currentWord);
+  return entries.filter(e => e.word && e.translation);
 }
 
 // ── URL IMPORTER (JSON / CSV / Google Sheets public CSV) ─────────────────────
@@ -4869,13 +4983,19 @@ function ImportPanel({
   };
   const tabs = [{
     id: 'text',
-    label: '📋 Colar Texto'
+    label: '📋 Texto'
+  }, {
+    id: 'markdown',
+    label: '📝 Markdown'
+  }, {
+    id: 'excel',
+    label: '📊 Excel'
   }, {
     id: 'url',
     label: '🔗 URL / Sheets'
   }, {
     id: 'pdf',
-    label: '📄 PDF Local'
+    label: '📄 PDF'
   }];
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4945,7 +5065,150 @@ function ImportPanel({
       fontSize: 13,
       fontWeight: 600
     }
-  }, "Detectar Palavras")), mode === 'url' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+  }, "Detectar Palavras")), mode === 'markdown' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Cole conte\xFAdo Markdown (.md)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: t.muted,
+      fontSize: 11,
+      marginBottom: 8,
+      lineHeight: 1.6
+    }
+  }, "Suporta: ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "## palavra"), " com campos ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "**Tradu\xE7\xE3o:**"), ", tabelas ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "| palavra | tradu\xE7\xE3o |"), " e listas com ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "**palavra** \u2014 tradu\xE7\xE3o")), /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      resize: 'vertical',
+      minHeight: 160,
+      fontFamily: 'monospace',
+      fontSize: 12
+    },
+    value: text,
+    onChange: e => setText(e.target.value),
+    placeholder: "## ami\n**Tradução:** amar\n**Classe:** verbo\n**Pronúncia:** /aˈmi/\n\n| palavra | tradução | classe |\n|---------|----------|--------|\n| libro | livro | substantivo |"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const es = parseMarkdown(text);
+      if (!es.length) {
+        notify('Nenhuma palavra detectada.', 'err');
+        return;
+      }
+      setPreview(es);
+    },
+    style: {
+      marginTop: 10,
+      padding: '8px 18px',
+      background: t.accent,
+      color: t.light ? '#fff' : '#000',
+      border: 'none',
+      borderRadius: 9,
+      cursor: 'pointer',
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "Detectar Palavras")), mode === 'excel' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Upload de Excel (.xlsx, .xls) ou CSV (.csv)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: t.muted,
+      fontSize: 11,
+      marginBottom: 12,
+      lineHeight: 1.6
+    }
+  }, "Compat\xEDvel com exporta\xE7\xF5es do ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "WordTheme"), " e planilhas personalizadas.", /*#__PURE__*/React.createElement("br", null), "Colunas detectadas automaticamente: ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "Palavra | Tradu\xE7\xE3o | Classe | Pron\xFAncia | Etimologia | Defini\xE7\xE3o | Tags | Notas")), React.createElement(() => {
+    const exRef = React.useRef();
+    const handleExcel = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const r = new FileReader();
+      r.onload = ev => {
+        try {
+          const wb = XLSX.read(ev.target.result, {
+            type: 'binary'
+          });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, {
+            header: 1
+          });
+          const today = new Date().toISOString().split('T')[0];
+          // Auto-detect header row
+          let dataStart = 0;
+          const firstRow = (rows[0] || []).map(c => String(c || '').toLowerCase());
+          if (firstRow.some(c => ['word', 'palavra', 'word', 'term'].includes(c))) dataStart = 1;
+          const es = rows.slice(dataStart).filter(r => r[0]).map((r, i) => ({
+            id: Date.now() + i,
+            word: String(r[0] || '').trim(),
+            translation: String(r[1] || '').trim(),
+            class: String(r[2] || 'substantivo').trim() || 'substantivo',
+            pronunciation: String(r[3] || '').trim(),
+            etymology: String(r[4] || '').trim(),
+            definition: String(r[5] || '').trim(),
+            tags: String(r[6] || '').split(/[,;]/).map(t => t.trim()).filter(Boolean),
+            notes: String(r[7] || '').trim(),
+            examples: r[8] ? [String(r[8]).trim()] : [],
+            roots: [],
+            audio: null,
+            image: null,
+            created: today
+          }));
+          setPreview(es);
+          notify(`${es.length} palavras detectadas do Excel!`);
+        } catch (err) {
+          notify('Erro ao ler arquivo: ' + err.message, 'err');
+        }
+      };
+      r.readAsBinaryString(file);
+      e.target.value = '';
+    };
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
+      onClick: () => exRef.current?.click(),
+      style: {
+        padding: '9px 18px',
+        background: t.surf,
+        color: t.accent,
+        border: `1px solid ${t.cb}`,
+        borderRadius: 9,
+        cursor: 'pointer',
+        fontFamily: t.fB,
+        fontSize: 13,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, "\uD83D\uDCC2 Escolher Excel / CSV"), /*#__PURE__*/React.createElement("input", {
+      ref: exRef,
+      type: "file",
+      accept: ".xlsx,.xls,.csv",
+      style: {
+        display: 'none'
+      },
+      onChange: handleExcel
+    }));
+  }, null)), mode === 'url' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     style: lbl
   }, "URL do arquivo (JSON, CSV ou Google Sheets p\xFAblico)"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5249,22 +5512,26 @@ function initFirebase(config) {
     return false;
   }
   try {
-    const scripts = ["https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"];
+    const scripts = ["https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"];
     let loaded = 0;
-    scripts.forEach(src => {
-      if (document.querySelector(`script[src="${src}"]`)) {
-        loaded++;
+    const tryActivate = () => {
+      loaded++;
+      if (loaded === scripts.length) activateFirebase(config);
+    };
+    scripts.forEach(url => {
+      if (document.querySelector(`script[src="${url}"]`)) {
+        tryActivate();
         return;
       }
       const s = document.createElement("script");
-      s.src = src;
-      s.onload = () => {
-        loaded++;
-        if (loaded === scripts.length) activateFirebase(config);
+      s.src = url;
+      s.onload = tryActivate;
+      s.onerror = () => {
+        console.warn("[Firebase] Falha ao carregar:", url);
+        tryActivate();
       };
       document.head.appendChild(s);
     });
-    if (loaded === scripts.length) activateFirebase(config);
     return true;
   } catch (e) {
     console.error("[Firebase]", e);
@@ -7751,7 +8018,8 @@ function FirebaseSettingsBlock({
     style: {
       display: "flex",
       gap: 8,
-      marginTop: 12
+      marginTop: 12,
+      flexWrap: "wrap"
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: save,
@@ -7767,6 +8035,34 @@ function FirebaseSettingsBlock({
       fontWeight: 600
     }
   }, "\uD83D\uDD25 Salvar e Ativar Firebase"), isActive && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      // Generate standalone HTML with config embedded
+      const configJs = `\n// ── FIREBASE CONFIG (embedded) ──\nvar EMBEDDED_FB_CONFIG=${JSON.stringify(cfg)};\n`;
+      fetch(window.location.href).then(r => r.text()).then(html => {
+        const patched = html.replace('// ── SPLASH ANIMATION', configJs + '// ── SPLASH ANIMATION');
+        const blob = new Blob([patched], {
+          type: 'text/html'
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'verbarium-configurado.html';
+        a.click();
+      }).catch(() => {
+        // Fallback: inject via localStorage note
+        alert('Para embutir o config: copie o arquivo verbarium.html e adicione antes do IIFE:\nvar EMBEDDED_FB_CONFIG=' + JSON.stringify(cfg) + ';');
+      });
+    },
+    style: {
+      padding: "8px 14px",
+      background: "rgba(80,200,255,0.15)",
+      color: "#50c8ff",
+      border: "1px solid rgba(80,200,255,0.3)",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDCE6 Gerar HTML Configurado"), isActive && /*#__PURE__*/React.createElement("button", {
     onClick: clear,
     style: {
       padding: "8px 14px",
@@ -7778,7 +8074,18 @@ function FirebaseSettingsBlock({
       fontFamily: t.fB,
       fontSize: 13
     }
-  }, "Desativar"))));
+  }, "Desativar")), isActive && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      fontSize: 11,
+      color: "#50c8ff",
+      lineHeight: 1.6,
+      background: "rgba(80,200,255,0.06)",
+      border: "1px solid rgba(80,200,255,0.2)",
+      borderRadius: 8,
+      padding: "8px 12px"
+    }
+  }, "\uD83D\uDCA1 ", /*#__PURE__*/React.createElement("strong", null, "Gerar HTML Configurado"), " cria um arquivo com o Firebase j\xE1 embutido. Qualquer pessoa que abrir esse arquivo vai conectar automaticamente \u2014 sem precisar configurar nada.")));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -7919,16 +8226,22 @@ let authBridge = {
 };
 function activateAuthBridge() {
   try {
-    if (!window.firebase?.auth) {
-      // Load Firebase Auth
-      const s = document.createElement("script");
-      s.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js";
-      s.onload = () => {
-        setupAuth();
-      };
-      document.head.appendChild(s);
-    } else {
+    // Auth script already loaded by initFirebase — just setup
+    if (window.firebase?.auth) {
       setupAuth();
+    } else {
+      // Retry a few times in case scripts are still loading
+      let retries = 0;
+      const retry = setInterval(() => {
+        retries++;
+        if (window.firebase?.auth) {
+          clearInterval(retry);
+          setupAuth();
+        } else if (retries > 20) {
+          clearInterval(retry);
+          console.warn("[Auth] firebase.auth not available");
+        }
+      }, 300);
     }
   } catch (e) {
     console.error("[Auth]", e);
@@ -8701,6 +9014,351 @@ function Leaderboard({
   }, "Nv.", Math.floor((m.xp || 0) / 500) + 1)))));
 }
 
+// ── ABOUT PAGE ────────────────────────────────────────────────────────────────
+function AboutPage({
+  t
+}) {
+  const S = ({
+    children,
+    color
+  }) => /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: color || t.accent
+    }
+  }, children);
+  const box = {
+    background: t.card,
+    border: `1px solid ${t.cb}`,
+    borderRadius: 14,
+    padding: 20,
+    marginBottom: 14
+  };
+  const hd = {
+    fontFamily: t.fD,
+    color: t.accent,
+    fontSize: 13,
+    letterSpacing: 1,
+    marginBottom: 12,
+    display: "flex",
+    alignItems: "center",
+    gap: 8
+  };
+  const p = {
+    fontSize: 14,
+    color: t.muted,
+    lineHeight: 1.8,
+    marginBottom: 10
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 680,
+      paddingBottom: 40
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "32px 16px 28px",
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 20,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 36,
+      color: t.accent,
+      textShadow: `0 0 30px ${t.ag}`,
+      marginBottom: 4
+    }
+  }, "Verbarium"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 11,
+      color: t.muted,
+      letterSpacing: 3,
+      marginBottom: 16
+    }
+  }, "PRO"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      ...p,
+      textAlign: "center",
+      maxWidth: 440,
+      margin: "0 auto 16px",
+      fontStyle: "italic"
+    }
+  }, "A ferramenta definitiva para criadores de l\xEDnguas constru\xEDdas.", /*#__PURE__*/React.createElement("br", null), "Organize, forje e compartilhe sua criatividade lingu\xEDstica."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      justifyContent: "center"
+    }
+  }, ["📖 Léxico completo", "🎮 6 jogos de estudo", "🧠 Revisão espaçada", "🏛️ Salas colaborativas", "📅 Missões", "🔊 Áudio nativo", "🌐 6 idiomas", "📱 PWA offline"].map(f => /*#__PURE__*/React.createElement("span", {
+    key: f,
+    style: {
+      fontSize: 12,
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      padding: "4px 12px",
+      borderRadius: 20,
+      color: t.text
+    }
+  }, f)))), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83D\uDCDA Gest\xE3o de L\xE9xico"), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "Dicion\xE1rio completo com suporte a ", /*#__PURE__*/React.createElement(S, null, "pron\xFAncia IPA"), ", classes gramaticais, imagens, etimologia, ra\xEDzes, afixos, exemplos de uso e \xE1udio gravado pelo pr\xF3prio criador. Tudo organizado e f\xE1cil de buscar com filtros por classe, tag e ordena\xE7\xE3o.")), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83C\uDFDB\uFE0F Salas Colaborativas"), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "Crie salas para construir l\xEDnguas em grupo. Convide colaboradores via ID, defina pap\xE9is (Criador, Revisor, Contribuidor), aprove contribui\xE7\xF5es e acompanhe o progresso de cada membro em tempo real via Firebase.")), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83C\uDFAF Miss\xF5es e Gamifica\xE7\xE3o"), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "Sistema completo de XP, n\xEDveis com t\xEDtulos \xFAnicos (de ", /*#__PURE__*/React.createElement(S, null, "Aprendiz"), " a ", /*#__PURE__*/React.createElement(S, null, "Imortal das L\xEDnguas"), "), streak di\xE1rio, 12 conquistas, desafio di\xE1rio e revis\xE3o espa\xE7ada (SRS \u2014 algoritmo Anki). Ranking entre membros das salas colaborativas.")), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83D\uDCE5 Importa\xE7\xE3o M\xFAltipla"), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "Importe vocabul\xE1rio de ", /*#__PURE__*/React.createElement(S, null, "Excel (.xlsx)"), ", ", /*#__PURE__*/React.createElement(S, null, "CSV"), ", ", /*#__PURE__*/React.createElement(S, null, "Markdown (.md)"), ", ", /*#__PURE__*/React.createElement(S, null, "texto simples"), " (formatos palavra=tradu\xE7\xE3o), ", /*#__PURE__*/React.createElement(S, null, "PDF local"), " e ", /*#__PURE__*/React.createElement(S, null, "Google Sheets p\xFAblico"), ". Compat\xEDvel com os formatos do WordTheme e formato nativo ", /*#__PURE__*/React.createElement(S, null, ".confor"), ".")), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83D\uDCF4 Offline + Nuvem"), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "Funciona ", /*#__PURE__*/React.createElement(S, null, "100% offline"), " \u2014 dados salvos no dispositivo. Com Firebase configurado: sincroniza\xE7\xE3o autom\xE1tica na nuvem, login com Google, hist\xF3rico de chat persistente para todos os membros das salas.")), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83D\uDC64 Sobre o Autor"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 14,
+      flexWrap: "wrap",
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 60,
+      height: 60,
+      borderRadius: "50%",
+      background: t.ag,
+      border: `2px solid ${t.accent}`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 28,
+      flexShrink: 0
+    }
+  }, "\uD83E\uDDD9"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 16,
+      color: t.accent
+    }
+  }, "Saieso Seraos"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      marginTop: 2
+    }
+  }, "Oseias Soares da Silva Luz"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginTop: 4,
+      lineHeight: 1.6
+    }
+  }, "Criador de conlangs \xB7 Escritor \xB7 T\xE9cnico em Enfermagem \xB7 Instrutor de Inform\xE1tica \xB7 Desenvolvedor"))), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "Fundador da ", /*#__PURE__*/React.createElement(S, null, "Academia de Conlangs \u2013 L\xEDngua Forjada"), ", primeiro espa\xE7o brasileiro dedicado \xE0 cria\xE7\xE3o de l\xEDnguas artificiais. Autor do guia \"Como criar uma l\xEDngua em 15 passos\" e das comunidades no Telegram e Discord para entusiastas de conlangs."), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "O Verbarium foi criado para democratizar o acesso \xE0 cria\xE7\xE3o de l\xEDnguas artificiais no Brasil \u2014 do primeiro fonema ao dicion\xE1rio completo, para qualquer pessoa, mesmo sem conhecimento t\xE9cnico em lingu\xEDstica."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, [["🎓", "Superior em TI (em curso)"], ["🎓", "Técnico em Enfermagem (2026)"], ["💻", "Instrutor de Informática"], ["🎨", "Desenhista Mangá"], ["📚", "Autor independente"]].map(([ic, lb]) => /*#__PURE__*/React.createElement("span", {
+    key: lb,
+    style: {
+      fontSize: 12,
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      padding: "4px 10px",
+      borderRadius: 20,
+      color: t.muted
+    }
+  }, ic, " ", lb))), /*#__PURE__*/React.createElement("a", {
+    href: "https://academiadeconlangs.blogspot.com/",
+    target: "_blank",
+    rel: "noopener",
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      fontSize: 13,
+      color: t.accent,
+      textDecoration: "none",
+      background: t.ag,
+      padding: "6px 14px",
+      borderRadius: 9,
+      border: `1px solid ${t.cb}`
+    }
+  }, "\uD83D\uDD17 Academia de Conlangs")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...box,
+      borderColor: "rgba(255,150,150,0.3)",
+      background: "rgba(255,100,100,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83D\uDC9D Dedicat\xF3ria"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      ...p,
+      fontStyle: "italic"
+    }
+  }, "\"\xC0 minha mulher maravilhosa, meu incentivo di\xE1rio\" \u2013 ", /*#__PURE__*/React.createElement(S, {
+    color: "#ff8080"
+  }, "Eliene LBS \u2764\uFE0F")), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "Aos meus filhos, toda a minha alegria: ", /*#__PURE__*/React.createElement(S, null, "Lorhuan LBS"), " (5 anos \xB7 Minha energia!) e ", /*#__PURE__*/React.createElement(S, null, "Oliver LBS"), " (Rec\xE9m-nascido \xB7 Bem-vindo ao mundo!)."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      ...p,
+      marginBottom: 0
+    }
+  }, "\uD83D\uDE4F \xC0 minha m\xE3e, ", /*#__PURE__*/React.createElement(S, null, "Const\xE2ncia SSL"), ", que nunca parou de orar por n\xF3s. Agradecimentos aos integrantes dos grupos ", /*#__PURE__*/React.createElement(S, null, "Conlang Only"), " e ", /*#__PURE__*/React.createElement(S, null, "Conlangs Worlds"), ".")), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83C\uDF1F Outros Projetos"), [{
+    ic: "🗣️",
+    name: "Academia de Conlangs",
+    desc: "Blog dedicado a conlangs. Criação do Kalemi, língua de uma civilização perdida.",
+    url: "https://academiadeconlangs.blogspot.com/"
+  }, {
+    ic: "📖",
+    name: "O Último Véu",
+    desc: "Romance gótico ambientado em Veneza durante o Carnaval — onde surgiu a conlang Kalemi.",
+    url: null
+  }, {
+    ic: "🩺",
+    name: "EnfermaStudy",
+    desc: "App gratuito para enfermagem. Flashcards, calculadoras clínicas, ECG interativo — offline.",
+    url: "https://ossluz.github.io/enfermastudy/"
+  }].map(p2 => /*#__PURE__*/React.createElement("div", {
+    key: p2.name,
+    style: {
+      display: "flex",
+      gap: 10,
+      padding: "10px 0",
+      borderBottom: `1px solid ${t.cb}40`
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 22,
+      flexShrink: 0
+    }
+  }, p2.ic), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.accent,
+      fontFamily: t.fD
+    }
+  }, p2.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginTop: 2,
+      lineHeight: 1.5
+    }
+  }, p2.desc)), p2.url && /*#__PURE__*/React.createElement("a", {
+    href: p2.url,
+    target: "_blank",
+    rel: "noopener",
+    style: {
+      fontSize: 11,
+      color: t.accent,
+      textDecoration: "none",
+      alignSelf: "center",
+      padding: "4px 10px",
+      background: t.ag,
+      borderRadius: 8,
+      border: `1px solid ${t.cb}`,
+      whiteSpace: "nowrap",
+      flexShrink: 0
+    }
+  }, "Visitar")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...box,
+      borderColor: "rgba(100,220,120,0.3)",
+      background: "rgba(34,197,94,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hd
+  }, "\uD83D\uDC9A Apoie o Projeto"), /*#__PURE__*/React.createElement("p", {
+    style: p
+  }, "O Verbarium \xE9 ", /*#__PURE__*/React.createElement(S, {
+    color: "#22c55e"
+  }, "gratuito, sem an\xFAncios"), " e feito por uma \xFAnica pessoa nas horas vagas, com muito carinho. Se o app te ajudou, considere contribuir \u2014 mant\xE9m o projeto vivo e sempre crescendo."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.text,
+      marginBottom: 4
+    }
+  }, "\uD83C\uDFE6 Pix \u2014 Cloudwalk (InfinitePay)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "monospace",
+      fontSize: 14,
+      color: t.accent,
+      marginBottom: 4
+    }
+  }, "(94) 98412-2526"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted
+    }
+  }, "Favorecido: Oseias Soares da Silva Luz")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 10
+    }
+  }, "Doa\xE7\xF5es s\xE3o volunt\xE1rias e n\xE3o d\xE3o acesso a funcionalidades extras. O app sempre ser\xE1 100% gratuito.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      fontSize: 12,
+      color: t.muted,
+      marginTop: 8
+    }
+  }, "Verbarium PRO \xB7 v1.0.0 \xB7 Feito com \uD83D\uDC9C no Brasil"));
+}
+
 // ── SETTINGS SECTION ──────────────────────────────────────────────────────────
 function SettSection({
   dict,
@@ -9090,6 +9748,13 @@ function Verbarium() {
   useEffect(() => sv("vb_dicts", dicts), [dicts]);
   useEffect(() => sv("vb_study", study), [study]);
   useEffect(() => {
+    // Check for embedded config (baked into HTML)
+    if (window.EMBEDDED_FB_CONFIG && !ld("vb_fb_config", null)?.apiKey) {
+      sv("vb_fb_config", window.EMBEDDED_FB_CONFIG);
+      setFbConfig(window.EMBEDDED_FB_CONFIG);
+    }
+  }, []);
+  useEffect(() => {
     if (fbConfig?.apiKey) {
       const ok = initFirebase(fbConfig);
       if (ok) {
@@ -9387,6 +10052,10 @@ function Verbarium() {
     id: "achievements",
     n: "trophy",
     lb: L.nav.ach
+  }, {
+    id: "about",
+    n: "globe",
+    lb: "Sobre"
   }, {
     id: "settings",
     n: "settings",
@@ -10581,6 +11250,8 @@ function Verbarium() {
     t: t,
     notify: notify,
     fbReady: fbReady
+  }), tab === "about" && /*#__PURE__*/React.createElement(AboutPage, {
+    t: t
   }), tab === "settings" && /*#__PURE__*/React.createElement(SettSection, {
     dict: dict,
     theme: theme,
