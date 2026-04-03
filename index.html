@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Verbarium PRO"/>
-  <meta name="description" content="Verbarium PRO — O dicionário definitivo para criadores de línguas construídas"/>
+  <meta name="description" content="Verbarium PRO — Dicionário colaborativo para criadores de conlangs"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="apple-touch-icon" href="icons/icon-192.png"/>
   <title>Verbarium PRO</title>
@@ -42,11 +42,109 @@
   <script>
 (function(){
 "use strict";
-
 var fill=document.querySelector('#splash-fill');
 var pct=0;
 var iv=setInterval(function(){pct=pct<85?pct+(Math.random()*8+2):pct+0.3;if(pct>97)pct=97;fill.style.width=Math.min(pct,97)+'%';},120);
 function hideSplash(){clearInterval(iv);fill.style.width='100%';setTimeout(function(){var s=document.getElementById('splash');if(s){s.style.opacity='0';setTimeout(function(){s.remove();},500);}},300);}
+
+// ── PWA INSTALL PROMPT ───────────────────────────────────────────────────────
+var deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show install banner after app loads
+  setTimeout(showInstallBanner, 3000);
+});
+window.addEventListener('appinstalled', function() {
+  deferredInstallPrompt = null;
+  removeInstallBanner();
+  showToast('✅ Verbarium instalado com sucesso!', '#22c55e');
+});
+
+function showInstallBanner() {
+  if (!deferredInstallPrompt) return;
+  if (localStorage.getItem('vb_install_dismissed') === 'yes') return;
+  var existing = document.getElementById('vb-install-banner');
+  if (existing) return;
+  var banner = document.createElement('div');
+  banner.id = 'vb-install-banner';
+  banner.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+    '<span style="font-size:22px;">📲</span>' +
+    '<div style="flex:1;min-width:0;">' +
+    '<div style="font-weight:600;font-size:14px;">Instalar Verbarium PRO</div>' +
+    '<div style="font-size:12px;opacity:0.8;margin-top:2px;">Adicionar à tela inicial · funciona offline</div>' +
+    '</div>' +
+    '<button id="vb-install-btn" style="padding:8px 16px;background:#b48cff;color:#000;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap;">Instalar</button>' +
+    '<button id="vb-install-dismiss" style="padding:8px;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;font-size:12px;">✕</button>' +
+    '</div>';
+  banner.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#1a0a2a,#0a0a1f);color:#e8e0ff;padding:14px 18px;z-index:8000;box-shadow:0 -4px 24px rgba(0,0,0,0.5);border-top:1px solid rgba(180,140,255,0.3);font-family:Georgia,serif;animation:slideUpBanner 0.3s ease;';
+  if (!document.getElementById('vb-banner-style')) {
+    var st = document.createElement('style');
+    st.id = 'vb-banner-style';
+    st.textContent = '@keyframes slideUpBanner{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}';
+    document.head.appendChild(st);
+  }
+  document.body.appendChild(banner);
+  document.getElementById('vb-install-btn').addEventListener('click', function() {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(function(r) {
+      deferredInstallPrompt = null;
+      removeInstallBanner();
+    });
+  });
+  document.getElementById('vb-install-dismiss').addEventListener('click', function() {
+    localStorage.setItem('vb_install_dismissed','yes');
+    removeInstallBanner();
+  });
+}
+
+function removeInstallBanner() {
+  var b = document.getElementById('vb-install-banner');
+  if (b) { b.style.opacity='0'; b.style.transform='translateY(100%)'; b.style.transition='all 0.3s'; setTimeout(function(){b.remove();},300); }
+}
+
+// ── UPDATE NOTIFICATION ──────────────────────────────────────────────────────
+var pendingNewSW = null;
+
+function showToast(msg, color, duration) {
+  color = color || '#b48cff';
+  duration = duration || 4000;
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;top:72px;left:50%;transform:translateX(-50%);background:#15121f;border:1px solid '+color+';color:#e8e0ff;padding:12px 20px;border-radius:12px;font-size:13px;z-index:9000;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;font-family:Georgia,serif;white-space:nowrap;animation:fadeIn 0.2s;max-width:90vw;';
+  t.innerHTML = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){t.style.opacity='0';t.style.transition='opacity 0.3s';setTimeout(function(){t.remove();},300);}, duration);
+}
+
+function showUpdateBanner() {
+  var existing = document.getElementById('vb-update-banner');
+  if (existing) return;
+  var banner = document.createElement('div');
+  banner.id = 'vb-update-banner';
+  banner.innerHTML =
+    '<span style="font-size:18px;">🔄</span>' +
+    '<div style="flex:1"><div style="font-weight:600;font-size:14px;">Nova versão disponível!</div><div style="font-size:12px;opacity:0.8;margin-top:2px;">Clique para atualizar o Verbarium.</div></div>' +
+    '<button id="vb-update-btn" style="padding:8px 16px;background:#b48cff;color:#000;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:13px;">Atualizar</button>' +
+    '<button id="vb-update-dismiss" style="padding:8px;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;font-size:12px;">✕</button>';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#0a1a30,#0a0a1f);color:#e8e0ff;padding:12px 18px;z-index:8000;box-shadow:0 4px 24px rgba(0,0,0,0.5);border-bottom:1px solid rgba(80,200,255,0.4);font-family:Georgia,serif;display:flex;align-items:center;gap:12px;flex-wrap:wrap;animation:slideDownBanner 0.3s ease;';
+  if (!document.getElementById('vb-banner-style2')) {
+    var st = document.createElement('style');
+    st.id = 'vb-banner-style2';
+    st.textContent = '@keyframes slideDownBanner{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}';
+    document.head.appendChild(st);
+  }
+  document.body.appendChild(banner);
+  document.getElementById('vb-update-btn').addEventListener('click', function() {
+    if (pendingNewSW) { pendingNewSW.postMessage({type:'SKIP_WAITING'}); }
+    window.location.reload();
+  });
+  document.getElementById('vb-update-dismiss').addEventListener('click', function() {
+    var b = document.getElementById('vb-update-banner');
+    if (b) { b.style.opacity='0'; b.style.transition='opacity 0.3s'; setTimeout(function(){b.remove();},300); }
+  });
+}
 
 // Verbarium PRO — Pre-compiled
 const {
@@ -5027,6 +5125,3582 @@ function ImportPanel({
   }, "\u2705 Importar ", preview.length, " palavras para \"", dict.name, "\"")));
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  VERBARIUM — SISTEMA COLABORATIVO
+//  Offline-first + Firebase opcional
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function genId(len = 8) {
+  const c = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  return Array.from({
+    length: len
+  }, () => c[Math.floor(Math.random() * c.length)]).join("");
+}
+function tsNow() {
+  return new Date().toISOString();
+}
+function fmtTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return "agora";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return d.toLocaleDateString("pt-BR");
+}
+function fmtDate(ts) {
+  return ts ? new Date(ts).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }) : "—";
+}
+function daysLeft(deadline) {
+  if (!deadline) return null;
+  const d = Math.ceil((new Date(deadline) - new Date()) / 86400000);
+  return d;
+}
+const AVATARS = ["🧙", "🧝", "🧚", "🧜", "🦸", "🧑‍🎨", "🧑‍🏫", "🧑‍🔬", "🦹", "🧑‍💻", "🧑‍🎤", "🧑‍🚀", "👩‍🏭", "🧑‍🍳", "🦊", "🐉", "🦅", "🌙", "⚡", "🔮"];
+const ROLES = {
+  creator: {
+    label: "Criador",
+    color: "#ffd040",
+    icon: "👑"
+  },
+  reviewer: {
+    label: "Revisor",
+    color: "#50c8ff",
+    icon: "🔍"
+  },
+  contributor: {
+    label: "Contribuidor",
+    color: "#64dc78",
+    icon: "✏️"
+  },
+  observer: {
+    label: "Observador",
+    color: "#8a7aaa",
+    icon: "👁️"
+  }
+};
+
+// ── LOCAL USER ─────────────────────────────────────────────────────────────────
+function getLocalUser() {
+  let u = null;
+  try {
+    u = JSON.parse(localStorage.getItem("vb_user"));
+  } catch {}
+  if (!u) {
+    u = {
+      id: genId(12),
+      name: "",
+      avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)],
+      createdAt: tsNow()
+    };
+    localStorage.setItem("vb_user", JSON.stringify(u));
+  }
+  return u;
+}
+function saveLocalUser(u) {
+  localStorage.setItem("vb_user", JSON.stringify(u));
+}
+
+// ── ROOMS STORAGE ──────────────────────────────────────────────────────────────
+const ROOMS_KEY = "vb_rooms_v1";
+const CHAT_KEY = "vb_chat_v1";
+function loadRooms() {
+  try {
+    return JSON.parse(localStorage.getItem(ROOMS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+function saveRooms(rooms) {
+  localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
+}
+function loadChat(roomId) {
+  try {
+    return JSON.parse(localStorage.getItem(CHAT_KEY + "_" + roomId)) || [];
+  } catch {
+    return [];
+  }
+}
+function saveChat(roomId, msgs) {
+  localStorage.setItem(CHAT_KEY + "_" + roomId, JSON.stringify(msgs));
+}
+
+// ── FIREBASE BRIDGE ────────────────────────────────────────────────────────────
+// All Firebase calls go through this bridge.
+// Offline mode: bridge is a no-op. Online mode: bridge calls real Firebase.
+let fbBridge = {
+  ready: false,
+  init: config => {},
+  sendMessage: (roomId, msg) => Promise.resolve(),
+  listenMessages: (roomId, cb) => () => {},
+  pushContrib: (roomId, contrib) => Promise.resolve(),
+  listenRoom: (roomId, cb) => () => {},
+  syncRoom: room => Promise.resolve(),
+  loadHistory: roomId => Promise.resolve([])
+};
+function initFirebase(config) {
+  if (!config?.apiKey) {
+    return false;
+  }
+  try {
+    const scripts = ["https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"];
+    let loaded = 0;
+    scripts.forEach(src => {
+      if (document.querySelector(`script[src="${src}"]`)) {
+        loaded++;
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => {
+        loaded++;
+        if (loaded === scripts.length) activateFirebase(config);
+      };
+      document.head.appendChild(s);
+    });
+    if (loaded === scripts.length) activateFirebase(config);
+    return true;
+  } catch (e) {
+    console.error("[Firebase]", e);
+    return false;
+  }
+}
+function activateFirebase(config) {
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(config);
+    const db = firebase.firestore();
+    fbBridge = {
+      ready: true,
+      init: c => {},
+      sendMessage: async (roomId, msg) => {
+        await db.collection("rooms").doc(roomId).collection("messages").add(msg);
+      },
+      listenMessages: (roomId, cb) => {
+        const unsub = db.collection("rooms").doc(roomId).collection("messages").orderBy("timestamp", "asc").limit(200).onSnapshot(snap => {
+          const msgs = snap.docs.map(d => ({
+            id: d.id,
+            ...d.data()
+          }));
+          cb(msgs);
+        });
+        return unsub;
+      },
+      loadHistory: async roomId => {
+        const snap = await db.collection("rooms").doc(roomId).collection("messages").orderBy("timestamp", "asc").limit(200).get();
+        return snap.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }));
+      },
+      syncRoom: async room => {
+        await db.collection("rooms").doc(room.id).set(room, {
+          merge: true
+        });
+      },
+      listenRoom: (roomId, cb) => {
+        const unsub = db.collection("rooms").doc(roomId).onSnapshot(snap => {
+          if (snap.exists) cb(snap.data());
+        });
+        return unsub;
+      },
+      pushContrib: async (roomId, contrib) => {
+        await db.collection("rooms").doc(roomId).collection("contributions").add(contrib);
+      }
+    };
+    console.log("[Verbarium] Firebase ativado ✓");
+  } catch (e) {
+    console.error("[Firebase] activateFirebase:", e);
+  }
+}
+
+// ── USER SETUP MODAL ───────────────────────────────────────────────────────────
+function UserSetupModal({
+  user,
+  onSave,
+  t
+}) {
+  const [name, setName] = useState(user.name || "");
+  const [avatar, setAvatar] = useState(user.avatar || AVATARS[0]);
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "10px 14px",
+    borderRadius: 10,
+    fontFamily: t.fB,
+    fontSize: 15,
+    outline: "none",
+    width: "100%"
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 14,
+      marginBottom: 20,
+      lineHeight: 1.6
+    }
+  }, "Configure seu perfil para participar de salas colaborativas. Este nome aparecer\xE1 para outros membros."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 6
+    }
+  }, "Seu Nome *"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: name,
+    onChange: e => setName(e.target.value),
+    placeholder: "Como voc\xEA quer ser chamado?"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Escolha seu Avatar"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, AVATARS.map(a => /*#__PURE__*/React.createElement("div", {
+    key: a,
+    onClick: () => setAvatar(a),
+    style: {
+      width: 44,
+      height: 44,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 24,
+      borderRadius: 12,
+      cursor: "pointer",
+      border: `2px solid ${avatar === a ? t.accent : t.cb}`,
+      background: avatar === a ? t.ag : "transparent",
+      transition: "all 0.15s"
+    }
+  }, a)))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (!name.trim()) return;
+      onSave({
+        ...user,
+        name: name.trim(),
+        avatar
+      });
+    },
+    style: {
+      padding: "10px 24px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "Salvar Perfil"));
+}
+
+// ── CHAT PANEL ─────────────────────────────────────────────────────────────────
+function ChatPanel({
+  room,
+  user,
+  t,
+  fbReady
+}) {
+  const [msgs, setMsgs] = useState(() => loadChat(room.id));
+  const [text, setText] = useState("");
+  const endRef = useRef();
+  const unsub = useRef();
+  useEffect(() => {
+    endRef.current?.scrollIntoView({
+      behavior: "smooth"
+    });
+  }, [msgs]);
+  useEffect(() => {
+    if (fbReady) {
+      // Load history from Firebase then listen
+      fbBridge.loadHistory(room.id).then(history => {
+        if (history.length > 0) {
+          setMsgs(history);
+          saveChat(room.id, history);
+        }
+      });
+      unsub.current = fbBridge.listenMessages(room.id, newMsgs => {
+        setMsgs(newMsgs);
+        saveChat(room.id, newMsgs);
+      });
+    }
+    return () => {
+      if (unsub.current) unsub.current();
+    };
+  }, [room.id, fbReady]);
+  const send = async () => {
+    const txt = text.trim();
+    if (!txt) return;
+    const msg = {
+      id: genId(12),
+      roomId: room.id,
+      authorId: user.id,
+      authorName: user.name,
+      authorAvatar: user.avatar,
+      text: txt,
+      timestamp: tsNow(),
+      type: "message"
+    };
+    setText("");
+    if (fbReady) {
+      await fbBridge.sendMessage(room.id, msg);
+    } else {
+      const updated = [...msgs, msg];
+      setMsgs(updated);
+      saveChat(room.id, updated);
+    }
+  };
+  const myRole = room.members?.find(m => m.id === user.id)?.role || "observer";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      minHeight: 0
+    }
+  }, !fbReady && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(245,158,11,0.12)",
+      border: "1px solid rgba(245,158,11,0.3)",
+      borderRadius: 10,
+      padding: "8px 14px",
+      marginBottom: 10,
+      fontSize: 12,
+      color: "#f59e0b",
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, "\u26A0\uFE0F Modo offline \u2014 mensagens salvas s\xF3 neste dispositivo. Ative o Firebase para chat em grupo real."), fbReady && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(34,197,94,0.1)",
+      border: "1px solid rgba(34,197,94,0.25)",
+      borderRadius: 10,
+      padding: "8px 14px",
+      marginBottom: 10,
+      fontSize: 12,
+      color: "#22c55e",
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, "\uD83D\uDFE2 Firebase conectado \u2014 hist\xF3rico permanente, sincronizado para todos os membros."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      overflowY: "auto",
+      padding: "4px 0",
+      minHeight: 0,
+      maxHeight: "calc(100vh - 400px)"
+    }
+  }, msgs.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 40,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 36,
+      marginBottom: 8
+    }
+  }, "\uD83D\uDCAC"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontStyle: "italic",
+      fontSize: 14
+    }
+  }, "Nenhuma mensagem ainda. Inicie a conversa!")) : msgs.map((msg, i) => {
+    const isMe = msg.authorId === user.id;
+    const showAvatar = i === 0 || msgs[i - 1]?.authorId !== msg.authorId;
+    return /*#__PURE__*/React.createElement("div", {
+      key: msg.id || i,
+      style: {
+        display: "flex",
+        flexDirection: isMe ? "row-reverse" : "row",
+        gap: 8,
+        marginBottom: showAvatar ? 10 : 3,
+        alignItems: "flex-end"
+      }
+    }, !isMe && showAvatar && /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 32,
+        height: 32,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 18,
+        background: t.surf,
+        border: `1px solid ${t.cb}`,
+        flexShrink: 0
+      }
+    }, msg.authorAvatar || "🧙"), !isMe && !showAvatar && /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 40,
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxWidth: "72%"
+      }
+    }, showAvatar && !isMe && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: t.muted,
+        marginBottom: 3,
+        fontFamily: t.fD
+      }
+    }, msg.authorName), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: isMe ? t.ag : t.surf,
+        border: `1px solid ${isMe ? t.accent : t.cb}`,
+        borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+        padding: "9px 14px",
+        fontSize: 14,
+        color: t.text,
+        lineHeight: 1.5
+      }
+    }, msg.text), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: t.muted,
+        marginTop: 2,
+        textAlign: isMe ? "right" : "left"
+      }
+    }, fmtTime(msg.timestamp))));
+  }), /*#__PURE__*/React.createElement("div", {
+    ref: endRef
+  })), (myRole === "creator" || myRole === "reviewer" || myRole === "contributor") && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 10,
+      padding: "10px",
+      background: t.surf,
+      borderRadius: 12,
+      border: `1px solid ${t.cb}`
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      flex: 1,
+      background: "transparent",
+      border: "none",
+      color: t.text,
+      fontFamily: t.fB,
+      fontSize: 14,
+      outline: "none"
+    },
+    value: text,
+    onChange: e => setText(e.target.value),
+    onKeyDown: e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    },
+    placeholder: "Mensagem\u2026 (Enter para enviar)"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: send,
+    style: {
+      padding: "6px 14px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "\u27A4")));
+}
+
+// ── MISSION PANEL ──────────────────────────────────────────────────────────────
+function MissionPanel({
+  room,
+  user,
+  onUpdateRoom,
+  dict,
+  t
+}) {
+  const [creating, setCreating] = useState(false);
+  const [mf, setMf] = useState({
+    title: "",
+    description: "",
+    type: "words",
+    target: 5,
+    tags: [],
+    deadline: "",
+    reward: 100
+  });
+  const missions = room.missions || [];
+  const myRole = room.members?.find(m => m.id === user.id)?.role || "observer";
+  const isCreator = myRole === "creator";
+  const createMission = () => {
+    if (!mf.title || !mf.target) return;
+    const deadline = mf.deadline ? new Date(mf.deadline).toISOString() : null;
+    const nm = {
+      ...mf,
+      id: genId(8),
+      createdAt: tsNow(),
+      deadline,
+      progress: {},
+      status: "active"
+    };
+    onUpdateRoom({
+      ...room,
+      missions: [...missions, nm]
+    });
+    setCreating(false);
+    setMf({
+      title: "",
+      description: "",
+      type: "words",
+      target: 5,
+      tags: [],
+      deadline: "",
+      reward: 100
+    });
+  };
+  const closeMission = id => onUpdateRoom({
+    ...room,
+    missions: missions.map(m => m.id === id ? {
+      ...m,
+      status: "closed"
+    } : m)
+  });
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "8px 12px",
+    borderRadius: 9,
+    fontFamily: t.fB,
+    fontSize: 14,
+    outline: "none",
+    width: "100%"
+  };
+  const lbl = {
+    fontSize: 9,
+    color: t.muted,
+    fontFamily: t.fD,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    display: "block",
+    marginBottom: 5
+  };
+  const activeMissions = missions.filter(m => m.status === "active");
+  const closedMissions = missions.filter(m => m.status === "closed");
+  return /*#__PURE__*/React.createElement("div", null, isCreator && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, !creating ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCreating(true),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "9px 18px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "plus"
+  }), "Nova Miss\xE3o") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 12,
+      letterSpacing: 1,
+      marginBottom: 14
+    }
+  }, "\u2728 CRIAR MISS\xC3O"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "T\xEDtulo da Miss\xE3o *"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: mf.title,
+    onChange: e => setMf(p => ({
+      ...p,
+      title: e.target.value
+    })),
+    placeholder: "ex: Adicione 5 palavras de emo\xE7\xF5es"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Descri\xE7\xE3o"), /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: 60,
+      resize: "vertical"
+    },
+    value: mf.description,
+    onChange: e => setMf(p => ({
+      ...p,
+      description: e.target.value
+    })),
+    placeholder: "Detalhes, regras, campo sem\xE2ntico esperado..."
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 12,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Tipo"), /*#__PURE__*/React.createElement("select", {
+    style: {
+      ...inp,
+      cursor: "pointer"
+    },
+    value: mf.type,
+    onChange: e => setMf(p => ({
+      ...p,
+      type: e.target.value
+    }))
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "words"
+  }, "Palavras adicionadas"), /*#__PURE__*/React.createElement("option", {
+    value: "phrases"
+  }, "Frases adicionadas"), /*#__PURE__*/React.createElement("option", {
+    value: "any"
+  }, "Qualquer contribui\xE7\xE3o"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Meta (quantidade)"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    type: "number",
+    min: 1,
+    value: mf.target,
+    onChange: e => setMf(p => ({
+      ...p,
+      target: parseInt(e.target.value) || 1
+    }))
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 12,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Prazo (opcional)"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    type: "date",
+    value: mf.deadline,
+    onChange: e => setMf(p => ({
+      ...p,
+      deadline: e.target.value
+    }))
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Recompensa XP"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    type: "number",
+    min: 10,
+    step: 10,
+    value: mf.reward,
+    onChange: e => setMf(p => ({
+      ...p,
+      reward: parseInt(e.target.value) || 100
+    }))
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: createMission,
+    style: {
+      padding: "8px 18px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "Criar Miss\xE3o"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCreating(false),
+    style: {
+      padding: "8px 14px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "Cancelar")))), activeMissions.length === 0 && !creating && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 40,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 40,
+      marginBottom: 8
+    }
+  }, "\uD83C\uDFAF"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "Nenhuma miss\xE3o ativa. ", isCreator ? "Crie a primeira!" : "")), activeMissions.map(m => {
+    const members = room.members || [];
+    const progress = m.progress || {};
+    const totalDone = Object.values(progress).reduce((a, v) => a + (v || 0), 0);
+    const pct = Math.min(100, Math.round(totalDone / m.target * 100));
+    const days = daysLeft(m.deadline);
+    const urgent = days !== null && days <= 2;
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      style: {
+        background: t.card,
+        border: `1px solid ${urgent ? "#ef444460" : t.cb}`,
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: 10,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 18
+      }
+    }, "\uD83C\uDFAF"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 16,
+        color: t.accent
+      }
+    }, m.title), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        background: "rgba(34,197,94,0.15)",
+        color: "#22c55e",
+        padding: "2px 8px",
+        borderRadius: 20
+      }
+    }, "ativa")), m.description && /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 13,
+        color: t.muted,
+        marginBottom: 10,
+        lineHeight: 1.5
+      }
+    }, m.description), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
+        flexWrap: "wrap",
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        color: t.muted
+      }
+    }, "Meta: ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: t.text
+      }
+    }, totalDone, "/", m.target)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        color: t.muted
+      }
+    }, "Recompensa: ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: t.accent
+      }
+    }, "+", m.reward, " XP")), days !== null && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        color: urgent ? "#ef4444" : t.muted
+      }
+    }, urgent ? "⚠️ " : "", days > 0 ? `${days} dias restantes` : "Prazo encerrado")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: t.surf,
+        borderRadius: 99,
+        height: 8,
+        overflow: "hidden",
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: `${pct}%`,
+        height: "100%",
+        background: pct >= 100 ? "#22c55e" : `linear-gradient(90deg,${t.accent}99,${t.accent})`,
+        borderRadius: 99,
+        transition: "width 0.5s",
+        boxShadow: `0 0 8px ${t.ag}`
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        fontSize: 11,
+        color: t.muted,
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", null, pct, "% conclu\xEDdo"), /*#__PURE__*/React.createElement("span", null, pct >= 100 ? "✅ Meta atingida!" : "")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        flexWrap: "wrap"
+      }
+    }, members.map(mb => /*#__PURE__*/React.createElement("div", {
+      key: mb.id,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        background: t.surf,
+        padding: "3px 8px",
+        borderRadius: 20,
+        fontSize: 11
+      }
+    }, /*#__PURE__*/React.createElement("span", null, mb.avatar), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: t.text
+      }
+    }, mb.name.split(" ")[0]), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: t.accent,
+        fontWeight: 600
+      }
+    }, progress[mb.id] || 0))))), isCreator && /*#__PURE__*/React.createElement("button", {
+      onClick: () => closeMission(m.id),
+      style: {
+        padding: "5px 12px",
+        background: "rgba(239,68,68,0.1)",
+        color: "#ef4444",
+        border: "1px solid rgba(239,68,68,0.25)",
+        borderRadius: 8,
+        cursor: "pointer",
+        fontSize: 12,
+        fontFamily: t.fB,
+        flexShrink: 0
+      }
+    }, "Encerrar")));
+  }), closedMissions.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.muted,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 8
+    }
+  }, "MISS\xD5ES ENCERRADAS"), closedMissions.map(m => /*#__PURE__*/React.createElement("div", {
+    key: m.id,
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 8,
+      opacity: 0.6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 14,
+      color: t.muted
+    }
+  }, m.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginTop: 2
+    }
+  }, "Encerrada \xB7 Meta: ", m.target, " \xB7 Recompensa: +", m.reward, " XP")))));
+}
+
+// ── CONTRIBUTIONS PANEL ────────────────────────────────────────────────────────
+function ContribPanel({
+  room,
+  user,
+  dict,
+  onUpdateRoom,
+  onAddToDict,
+  t,
+  notify
+}) {
+  const pending = room.pendingContributions || [];
+  const myRole = room.members?.find(m => m.id === user.id)?.role || "observer";
+  const canReview = myRole === "creator" || myRole === "reviewer";
+  const approve = c => {
+    if (c.type === "word") onAddToDict(c.data);else if (c.type === "phrase") onAddToDict(c.data, "phrase");
+    const updated = {
+      ...room,
+      pendingContributions: pending.filter(x => x.id !== c.id)
+    };
+    // Credit mission progress
+    if (room.missions) {
+      const missions = room.missions.map(m => {
+        if (m.status !== "active") return m;
+        if (m.type === "any" || m.type === "words" && c.type === "word" || m.type === "phrases" && c.type === "phrase") {
+          const prog = {
+            ...(m.progress || {})
+          };
+          prog[c.authorId] = (prog[c.authorId] || 0) + 1;
+          return {
+            ...m,
+            progress: prog
+          };
+        }
+        return m;
+      });
+      updated.missions = missions;
+    }
+    onUpdateRoom(updated);
+    notify(`✅ Contribuição de ${c.authorName} aprovada!`);
+  };
+  const reject = c => {
+    onUpdateRoom({
+      ...room,
+      pendingContributions: pending.filter(x => x.id !== c.id)
+    });
+    notify("❌ Contribuição rejeitada.", "info");
+  };
+
+  // Submit my own contribution
+  const [subMode, setSubMode] = useState(null);
+  const [word, setWord] = useState("");
+  const [trans, setTrans] = useState("");
+  const [phrase, setPhrase] = useState("");
+  const [ptrans, setPtrans] = useState("");
+  const submitWord = () => {
+    if (!word || !trans) return;
+    const data = {
+      id: Date.now(),
+      word,
+      translation: trans,
+      class: "substantivo",
+      pronunciation: "",
+      etymology: "",
+      definition: "",
+      examples: [],
+      tags: [],
+      roots: [],
+      notes: "",
+      audio: null,
+      image: null,
+      created: new Date().toISOString().split("T")[0]
+    };
+    const contrib = {
+      id: genId(8),
+      type: "word",
+      data,
+      authorId: user.id,
+      authorName: user.name,
+      authorAvatar: user.avatar,
+      submittedAt: tsNow()
+    };
+    if (room.settings?.requireApproval && myRole !== "creator") {
+      onUpdateRoom({
+        ...room,
+        pendingContributions: [...pending, contrib]
+      });
+      notify("📤 Contribuição enviada para aprovação!");
+    } else {
+      approve(contrib);
+    }
+    setWord("");
+    setTrans("");
+    setSubMode(null);
+  };
+  const submitPhrase = () => {
+    if (!phrase || !ptrans) return;
+    const data = {
+      id: Date.now(),
+      phrase,
+      translation: ptrans,
+      context: "neutro",
+      tags: [],
+      audio: null,
+      created: new Date().toISOString().split("T")[0]
+    };
+    const contrib = {
+      id: genId(8),
+      type: "phrase",
+      data,
+      authorId: user.id,
+      authorName: user.name,
+      authorAvatar: user.avatar,
+      submittedAt: tsNow()
+    };
+    if (room.settings?.requireApproval && myRole !== "creator") {
+      onUpdateRoom({
+        ...room,
+        pendingContributions: [...pending, contrib]
+      });
+      notify("📤 Frase enviada para aprovação!");
+    } else {
+      approve(contrib);
+    }
+    setPhrase("");
+    setPtrans("");
+    setSubMode(null);
+  };
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "8px 12px",
+    borderRadius: 9,
+    fontFamily: t.fB,
+    fontSize: 14,
+    outline: "none",
+    width: "100%"
+  };
+  return /*#__PURE__*/React.createElement("div", null, (myRole === "creator" || myRole === "contributor") && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "\u270F\uFE0F ENVIAR CONTRIBUI\xC7\xC3O"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSubMode(subMode === "word" ? null : "word"),
+    style: {
+      padding: "7px 14px",
+      borderRadius: 9,
+      border: `1px solid ${subMode === "word" ? t.accent : t.cb}`,
+      background: subMode === "word" ? t.ag : "transparent",
+      color: subMode === "word" ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDCD6 Palavra"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSubMode(subMode === "phrase" ? null : "phrase"),
+    style: {
+      padding: "7px 14px",
+      borderRadius: 9,
+      border: `1px solid ${subMode === "phrase" ? t.accent : t.cb}`,
+      background: subMode === "phrase" ? t.ag : "transparent",
+      color: subMode === "phrase" ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDCAC Frase")), subMode === "word" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 10,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 4
+    }
+  }, "Palavra *"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: word,
+    onChange: e => setWord(e.target.value),
+    placeholder: "palavra na conlang"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 4
+    }
+  }, "Tradu\xE7\xE3o *"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: trans,
+    onChange: e => setTrans(e.target.value),
+    placeholder: "significado"
+  }))), /*#__PURE__*/React.createElement("button", {
+    onClick: submitWord,
+    style: {
+      padding: "8px 18px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, room.settings?.requireApproval && myRole !== "creator" ? "Enviar para Aprovação" : "Adicionar Diretamente")), subMode === "phrase" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 4
+    }
+  }, "Frase *"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: phrase,
+    onChange: e => setPhrase(e.target.value),
+    placeholder: "frase na conlang"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 4
+    }
+  }, "Tradu\xE7\xE3o *"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: ptrans,
+    onChange: e => setPtrans(e.target.value),
+    placeholder: "tradu\xE7\xE3o da frase"
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: submitPhrase,
+    style: {
+      padding: "8px 18px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, room.settings?.requireApproval && myRole !== "creator" ? "Enviar para Aprovação" : "Adicionar Diretamente"))), canReview && pending.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: "#f59e0b",
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDD0D AGUARDANDO APROVA\xC7\xC3O (", pending.length, ")"), pending.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.id,
+    style: {
+      background: t.card,
+      border: `1px solid rgba(245,158,11,0.3)`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20
+    }
+  }, c.authorAvatar), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 13,
+      color: t.accent
+    }
+  }, c.authorName), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      color: t.muted
+    }
+  }, "\xB7 ", fmtTime(c.submittedAt)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      background: "rgba(245,158,11,0.15)",
+      color: "#f59e0b",
+      padding: "2px 8px",
+      borderRadius: 20,
+      marginLeft: "auto"
+    }
+  }, c.type === "word" ? "📖 Palavra" : "💬 Frase")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      borderRadius: 10,
+      padding: 10,
+      marginBottom: 10
+    }
+  }, c.type === "word" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 16,
+      color: t.accent
+    }
+  }, c.data.word), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: t.muted,
+      margin: "0 8px"
+    }
+  }, "\u2192"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      color: t.text
+    }
+  }, c.data.translation)), c.type === "phrase" && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 14,
+      color: t.accent,
+      marginBottom: 4
+    }
+  }, c.data.phrase), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      fontStyle: "italic"
+    }
+  }, c.data.translation))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => approve(c),
+    style: {
+      flex: 1,
+      padding: "8px",
+      background: "rgba(34,197,94,0.2)",
+      color: "#22c55e",
+      border: "1px solid rgba(34,197,94,0.4)",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "\u2705 Aprovar"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => reject(c),
+    style: {
+      flex: 1,
+      padding: "8px",
+      background: "rgba(239,68,68,0.15)",
+      color: "#ef4444",
+      border: "1px solid rgba(239,68,68,0.3)",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\u274C Rejeitar"))))), canReview && pending.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 32,
+      color: t.muted,
+      fontSize: 13,
+      fontStyle: "italic"
+    }
+  }, "\u2705 Nenhuma contribui\xE7\xE3o pendente."), !canReview && pending.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 20,
+      color: t.muted,
+      fontSize: 13
+    }
+  }, pending.length, " contribui\xE7\xE3o(\xF5es) aguardando aprova\xE7\xE3o do revisor."));
+}
+
+// ── MEMBERS PANEL ──────────────────────────────────────────────────────────────
+function MembersPanel({
+  room,
+  user,
+  onUpdateRoom,
+  t
+}) {
+  const members = room.members || [];
+  const myRole = members.find(m => m.id === user.id)?.role || "observer";
+  const isCreator = myRole === "creator";
+  const inviteLink = `ID da Sala: ${room.id}  →  Copie e compartilhe para convidar`;
+  const [copied, setCopied] = useState(false);
+  const copyInvite = () => {
+    navigator.clipboard?.writeText(room.id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  const changeRole = (memberId, newRole) => {
+    onUpdateRoom({
+      ...room,
+      members: members.map(m => m.id === memberId ? {
+        ...m,
+        role: newRole
+      } : m)
+    });
+  };
+  const removeMember = memberId => {
+    if (memberId === user.id) return;
+    onUpdateRoom({
+      ...room,
+      members: members.filter(m => m.id !== memberId)
+    });
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 8
+    }
+  }, "\uD83D\uDD17 LINK DE CONVITE"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      alignItems: "center",
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("code", {
+    style: {
+      flex: 1,
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      padding: "8px 12px",
+      borderRadius: 8,
+      fontSize: 13,
+      color: t.accent,
+      fontFamily: "monospace",
+      letterSpacing: 1
+    }
+  }, room.id), /*#__PURE__*/React.createElement("button", {
+    onClick: copyInvite,
+    style: {
+      padding: "8px 14px",
+      background: copied ? "rgba(34,197,94,0.2)" : t.ag,
+      color: copied ? "#22c55e" : t.accent,
+      border: `1px solid ${copied ? "rgba(34,197,94,0.4)" : t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      whiteSpace: "nowrap"
+    }
+  }, copied ? "✅ Copiado!" : "Copiar ID")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 8
+    }
+  }, "Compartilhe este ID. Na tela de Salas \u2192 \"Entrar com ID\" \u2192 cole aqui.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDC65 MEMBROS (", members.length, ")"), members.map(m => {
+    const role = ROLES[m.role] || ROLES.observer;
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        background: t.card,
+        border: `1px solid ${t.cb}`,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 40,
+        height: 40,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 22,
+        background: t.surf,
+        border: `1px solid ${t.cb}`,
+        flexShrink: 0
+      }
+    }, m.avatar || "🧙"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 14,
+        color: m.id === user.id ? t.accent : t.text
+      }
+    }, m.name), m.id === user.id && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: t.muted
+      }
+    }, "(voc\xEA)")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        marginTop: 3
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13
+      }
+    }, role.icon), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: role.color
+      }
+    }, role.label), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: t.muted
+      }
+    }, "\xB7 desde ", fmtDate(m.joinedAt)))), isCreator && m.id !== user.id && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("select", {
+      value: m.role,
+      onChange: e => changeRole(m.id, e.target.value),
+      style: {
+        background: t.inp,
+        border: `1px solid ${t.cb}`,
+        color: t.text,
+        padding: "4px 8px",
+        borderRadius: 7,
+        fontFamily: t.fB,
+        fontSize: 12,
+        outline: "none",
+        cursor: "pointer"
+      }
+    }, Object.entries(ROLES).filter(([k]) => k !== "creator").map(([k, v]) => /*#__PURE__*/React.createElement("option", {
+      key: k,
+      value: k
+    }, v.icon, " ", v.label))), /*#__PURE__*/React.createElement("button", {
+      onClick: () => removeMember(m.id),
+      style: {
+        padding: "4px 8px",
+        background: "rgba(239,68,68,0.1)",
+        color: "#ef4444",
+        border: "1px solid rgba(239,68,68,0.2)",
+        borderRadius: 7,
+        cursor: "pointer",
+        fontSize: 12
+      }
+    }, "\u2715")));
+  }));
+}
+
+// ── ROOM SETTINGS ──────────────────────────────────────────────────────────────
+function RoomSettingsPanel({
+  room,
+  user,
+  onUpdateRoom,
+  dict,
+  dicts,
+  t,
+  notify
+}) {
+  const myRole = room.members?.find(m => m.id === user.id)?.role;
+  if (myRole !== "creator") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: t.muted,
+      padding: 20,
+      fontSize: 13
+    }
+  }, "Apenas o criador pode acessar as configura\xE7\xF5es da sala.");
+  const [settings, setSettings] = useState(room.settings || {
+    requireApproval: true,
+    inviteExpiry: null
+  });
+  const save = () => {
+    onUpdateRoom({
+      ...room,
+      settings
+    });
+    notify("Configurações salvas!");
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 16
+    }
+  }, "\u2699\uFE0F CONFIGURA\xC7\xD5ES DA SALA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.text
+    }
+  }, "Exigir aprova\xE7\xE3o de contribui\xE7\xF5es"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted
+    }
+  }, "Contribui\xE7\xF5es precisam ser aprovadas antes de entrar no dicion\xE1rio")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSettings(s => ({
+      ...s,
+      requireApproval: !s.requireApproval
+    })),
+    style: {
+      width: 48,
+      height: 26,
+      borderRadius: 99,
+      border: "none",
+      cursor: "pointer",
+      background: settings.requireApproval ? t.accent : t.surf,
+      transition: "all 0.2s",
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 3,
+      width: 20,
+      height: 20,
+      borderRadius: "50%",
+      background: settings.requireApproval ? t.light ? "#fff" : "#000" : "#666",
+      transition: "all 0.2s",
+      left: settings.requireApproval ? "24px" : "3px"
+    }
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.text,
+      marginBottom: 4
+    }
+  }, "Papel padr\xE3o para novos membros"), /*#__PURE__*/React.createElement("select", {
+    value: settings.defaultRole || "contributor",
+    onChange: e => setSettings(s => ({
+      ...s,
+      defaultRole: e.target.value
+    })),
+    style: {
+      background: t.inp,
+      border: `1px solid ${t.cb}`,
+      color: t.text,
+      padding: "7px 12px",
+      borderRadius: 9,
+      fontFamily: t.fB,
+      fontSize: 14,
+      outline: "none",
+      width: "100%",
+      cursor: "pointer"
+    }
+  }, Object.entries(ROLES).filter(([k]) => k !== "creator").map(([k, v]) => /*#__PURE__*/React.createElement("option", {
+    key: k,
+    value: k
+  }, v.icon, " ", v.label)))), /*#__PURE__*/React.createElement("button", {
+    onClick: save,
+    style: {
+      padding: "9px 22px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "Salvar Configura\xE7\xF5es"));
+}
+
+// ── ROOM DASHBOARD ────────────────────────────────────────────────────────────
+function RoomDashboard({
+  room,
+  user,
+  rooms,
+  setRooms,
+  dicts,
+  onAddToDict,
+  t,
+  notify,
+  fbReady
+}) {
+  const [activeTab, setActiveTab] = useState("missions");
+  const tabs = [{
+    id: "missions",
+    icon: "🎯",
+    label: "Missões"
+  }, {
+    id: "contributions",
+    icon: "✏️",
+    label: "Contribuições"
+  }, {
+    id: "chat",
+    icon: "💬",
+    label: "Chat"
+  }, {
+    id: "members",
+    icon: "👥",
+    label: "Membros"
+  }, {
+    id: "roomSettings",
+    icon: "⚙️",
+    label: "Config."
+  }];
+  const dict = dicts.find(d => d.id === room.dictId) || dicts[0];
+  const onUpdateRoom = updated => {
+    const newRooms = rooms.map(r => r.id === updated.id ? updated : r);
+    setRooms(newRooms);
+    saveRooms(newRooms);
+    if (fbReady) fbBridge.syncRoom(updated);
+  };
+  const handleAddToDict = (data, type = "word") => {
+    // This needs to bubble up to main app
+    onAddToDict(data, type, room.dictId);
+  };
+  const pending = (room.pendingContributions || []).length;
+  const myRole = room.members?.find(m => m.id === user.id)?.role || "observer";
+  const canApprove = myRole === "creator" || myRole === "reviewer";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent
+    }
+  }, room.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginTop: 3
+    }
+  }, dict?.name || "Dicionário", " \xB7 ", (room.members || []).length, " membros \xB7 ID: ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent,
+      fontFamily: "monospace"
+    }
+  }, room.id))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      background: t.ag,
+      color: t.accent,
+      padding: "4px 10px",
+      borderRadius: 20,
+      border: `1px solid ${t.cb}`
+    }
+  }, ROLES[myRole]?.icon, " ", ROLES[myRole]?.label || myRole), pending > 0 && canApprove && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      background: "rgba(245,158,11,0.2)",
+      color: "#f59e0b",
+      padding: "4px 10px",
+      borderRadius: 20,
+      border: "1px solid rgba(245,158,11,0.3)"
+    }
+  }, pending, " pendente", pending !== 1 ? "s" : "")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 5,
+      marginBottom: 16,
+      flexWrap: "wrap"
+    }
+  }, tabs.map(tab => /*#__PURE__*/React.createElement("button", {
+    key: tab.id,
+    onClick: () => setActiveTab(tab.id),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "7px 12px",
+      borderRadius: 10,
+      border: `1px solid ${activeTab === tab.id ? t.accent : t.cb}`,
+      background: activeTab === tab.id ? t.ag : "transparent",
+      color: activeTab === tab.id ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12,
+      transition: "all 0.15s",
+      position: "relative"
+    }
+  }, tab.icon, " ", tab.label, tab.id === "contributions" && pending > 0 && canApprove && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: -5,
+      right: -5,
+      width: 16,
+      height: 16,
+      background: "#f59e0b",
+      borderRadius: "50%",
+      fontSize: 9,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#000",
+      fontWeight: 600
+    }
+  }, pending)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      overflowY: "auto"
+    }
+  }, activeTab === "missions" && /*#__PURE__*/React.createElement(MissionPanel, {
+    room: room,
+    user: user,
+    onUpdateRoom: onUpdateRoom,
+    dict: dict,
+    t: t
+  }), activeTab === "contributions" && /*#__PURE__*/React.createElement(ContribPanel, {
+    room: room,
+    user: user,
+    dict: dict,
+    onUpdateRoom: onUpdateRoom,
+    onAddToDict: handleAddToDict,
+    t: t,
+    notify: notify
+  }), activeTab === "chat" && /*#__PURE__*/React.createElement(ChatPanel, {
+    room: room,
+    user: user,
+    t: t,
+    fbReady: fbReady
+  }), activeTab === "members" && /*#__PURE__*/React.createElement(MembersPanel, {
+    room: room,
+    user: user,
+    onUpdateRoom: onUpdateRoom,
+    t: t
+  }), activeTab === "roomSettings" && /*#__PURE__*/React.createElement(RoomSettingsPanel, {
+    room: room,
+    user: user,
+    onUpdateRoom: onUpdateRoom,
+    dict: dict,
+    dicts: dicts,
+    t: t,
+    notify: notify
+  })));
+}
+
+// ── ROOMS SECTION ──────────────────────────────────────────────────────────────
+function RoomsSection({
+  dicts,
+  user,
+  setUser,
+  onAddToDict,
+  t,
+  notify,
+  fbReady
+}) {
+  const [rooms, setRooms] = useState(() => loadRooms());
+  const [view, setView] = useState("list"); // list | create | join | room
+  const [activeRoom, setActiveRoom] = useState(null);
+  const [creating, setCf] = useState({
+    name: "",
+    dictId: dicts[0]?.id || "",
+    requireApproval: true
+  });
+  const [joinId, setJoinId] = useState("");
+  if (!user.name) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxWidth: 500,
+        margin: "0 auto"
+      }
+    }, /*#__PURE__*/React.createElement("h2", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 20,
+        color: t.accent,
+        marginBottom: 4
+      }
+    }, "Salas Colaborativas"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: t.muted,
+        fontSize: 14,
+        marginBottom: 20
+      }
+    }, "Para participar de salas, configure seu perfil primeiro."), /*#__PURE__*/React.createElement(UserSetupModal, {
+      user: user,
+      onSave: u => {
+        setUser(u);
+        saveLocalUser(u);
+        notify("Perfil salvo! ✨");
+      },
+      t: t
+    }));
+  }
+  const createRoom = () => {
+    if (!creating.name.trim()) return;
+    const room = {
+      id: genId(8),
+      name: creating.name.trim(),
+      dictId: creating.dictId,
+      createdBy: user.id,
+      createdAt: tsNow(),
+      members: [{
+        id: user.id,
+        name: user.name,
+        avatar: user.avatar,
+        role: "creator",
+        joinedAt: tsNow()
+      }],
+      missions: [],
+      pendingContributions: [],
+      settings: {
+        requireApproval: creating.requireApproval,
+        defaultRole: "contributor",
+        inviteExpiry: null
+      }
+    };
+    const updated = [...rooms, room];
+    setRooms(updated);
+    saveRooms(updated);
+    if (fbReady) fbBridge.syncRoom(room);
+    setActiveRoom(room.id);
+    setView("room");
+    notify(`Sala "${room.name}" criada! Compartilhe o ID: ${room.id} 🎉`);
+  };
+  const joinRoom = async () => {
+    const id = joinId.trim();
+    if (!id) return;
+    if (rooms.find(r => r.id === id)) {
+      setActiveRoom(id);
+      setView("room");
+      setJoinId("");
+      return;
+    }
+    // Try Firebase
+    if (fbReady) {
+      try {
+        const snap = await firebase.firestore().collection("rooms").doc(id).get();
+        if (snap.exists) {
+          const room = snap.data();
+          const alreadyMember = room.members?.find(m => m.id === user.id);
+          if (!alreadyMember) {
+            room.members = [...(room.members || []), {
+              id: user.id,
+              name: user.name,
+              avatar: user.avatar,
+              role: room.settings?.defaultRole || "contributor",
+              joinedAt: tsNow()
+            }];
+            await fbBridge.syncRoom(room);
+          }
+          const updated = [...rooms.filter(r => r.id !== room.id), room];
+          setRooms(updated);
+          saveRooms(updated);
+          setActiveRoom(room.id);
+          setView("room");
+          setJoinId("");
+          notify(`Entrou na sala "${room.name}"! 🎉`);
+          return;
+        }
+      } catch (e) {
+        console.warn("Firebase join:", e);
+      }
+    }
+    notify("Sala não encontrada. Verifique o ID ou ative o Firebase para salas online.", "err");
+  };
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "9px 12px",
+    borderRadius: 10,
+    fontFamily: t.fB,
+    fontSize: 14,
+    outline: "none",
+    width: "100%"
+  };
+  const lbl = {
+    fontSize: 9,
+    color: t.muted,
+    fontFamily: t.fD,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    display: "block",
+    marginBottom: 5
+  };
+  if (view === "room") {
+    const room = rooms.find(r => r.id === activeRoom);
+    if (!room) {
+      setView("list");
+      return null;
+    }
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setView("list"),
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "6px 12px",
+        background: t.surf,
+        color: t.muted,
+        border: `1px solid ${t.cb}`,
+        borderRadius: 9,
+        cursor: "pointer",
+        fontFamily: t.fB,
+        fontSize: 12,
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement(Ic, {
+      n: "x"
+    }), "Voltar \xE0s Salas"), /*#__PURE__*/React.createElement(RoomDashboard, {
+      room: room,
+      user: user,
+      rooms: rooms,
+      setRooms: r => {
+        setRooms(r);
+        saveRooms(r);
+      },
+      dicts: dicts,
+      onAddToDict: onAddToDict,
+      t: t,
+      notify: notify,
+      fbReady: fbReady
+    }));
+  }
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 20,
+      flexWrap: "wrap",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent
+    }
+  }, "Salas Colaborativas"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 12,
+      marginTop: 2
+    }
+  }, user.avatar, " ", user.name, " \xB7 ", fbReady ? "🟢 Firebase conectado" : "🔴 Modo offline")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView(view === "join" ? "list" : "join"),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 9,
+      border: `1px solid ${view === "join" ? t.accent : t.cb}`,
+      background: view === "join" ? t.ag : "transparent",
+      color: view === "join" ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDD17 Entrar com ID"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView(view === "create" ? "list" : "create"),
+    style: {
+      padding: "8px 16px",
+      borderRadius: 9,
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "plus"
+  }), "Nova Sala"))), !fbReady && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(245,158,11,0.08)",
+      border: "1px solid rgba(245,158,11,0.25)",
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 16,
+      fontSize: 13,
+      color: "#f59e0b",
+      lineHeight: 1.6
+    }
+  }, "\u26A0\uFE0F ", /*#__PURE__*/React.createElement("strong", null, "Modo offline:"), " Salas funcionam localmente neste dispositivo. Para colabora\xE7\xE3o em tempo real e chat persistente, ative o Firebase em ", /*#__PURE__*/React.createElement("strong", null, "Configura\xE7\xF5es \u2192 Firebase"), "."), view === "join" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 12,
+      letterSpacing: 1,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDD17 ENTRAR EM UMA SALA"), /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "ID da Sala (compartilhado pelo criador)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      flex: 1,
+      fontFamily: "monospace",
+      letterSpacing: 1
+    },
+    value: joinId,
+    onChange: e => setJoinId(e.target.value.trim()),
+    placeholder: "ex: xK9mP2aB",
+    onKeyDown: e => e.key === "Enter" && joinRoom()
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: joinRoom,
+    style: {
+      padding: "9px 18px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600,
+      whiteSpace: "nowrap"
+    }
+  }, "Entrar"))), view === "create" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 12,
+      letterSpacing: 1,
+      marginBottom: 14
+    }
+  }, "\u2728 CRIAR NOVA SALA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Nome da Sala *"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: creating.name,
+    onChange: e => setCf(p => ({
+      ...p,
+      name: e.target.value
+    })),
+    placeholder: "ex: \xC9lvari \u2014 Constru\xE7\xE3o Colaborativa"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Dicion\xE1rio Base"), /*#__PURE__*/React.createElement("select", {
+    style: {
+      ...inp,
+      cursor: "pointer"
+    },
+    value: creating.dictId,
+    onChange: e => setCf(p => ({
+      ...p,
+      dictId: e.target.value
+    }))
+  }, dicts.map(d => /*#__PURE__*/React.createElement("option", {
+    key: d.id,
+    value: d.id
+  }, d.name)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.text
+    }
+  }, "Exigir aprova\xE7\xE3o"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted
+    }
+  }, "Contribui\xE7\xF5es precisam da sua aprova\xE7\xE3o antes de entrar")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCf(p => ({
+      ...p,
+      requireApproval: !p.requireApproval
+    })),
+    style: {
+      width: 48,
+      height: 26,
+      borderRadius: 99,
+      border: "none",
+      cursor: "pointer",
+      background: creating.requireApproval ? t.accent : t.surf,
+      position: "relative",
+      transition: "all 0.2s"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 3,
+      width: 20,
+      height: 20,
+      borderRadius: "50%",
+      background: creating.requireApproval ? t.light ? "#fff" : "#000" : "#666",
+      transition: "all 0.2s",
+      left: creating.requireApproval ? "24px" : "3px"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: createRoom,
+    style: {
+      padding: "9px 20px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "Criar Sala"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView("list"),
+    style: {
+      padding: "9px 14px",
+      background: "transparent",
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "Cancelar"))), rooms.length === 0 && view === "list" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 60,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 48,
+      marginBottom: 12
+    }
+  }, "\uD83C\uDFDB\uFE0F"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontStyle: "italic",
+      marginBottom: 20,
+      fontSize: 15
+    }
+  }, "Nenhuma sala ainda. Crie a primeira ou entre com um ID!")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
+      gap: 14
+    }
+  }, rooms.map(room => {
+    const myMember = room.members?.find(m => m.id === user.id);
+    const myRole = myMember?.role || "observer";
+    const role = ROLES[myRole] || ROLES.observer;
+    const dict = dicts.find(d => d.id === room.dictId);
+    const pending = (room.pendingContributions || []).length;
+    const activeMissions = (room.missions || []).filter(m => m.status === "active").length;
+    return /*#__PURE__*/React.createElement("div", {
+      key: room.id,
+      style: {
+        background: t.card,
+        border: `1px solid ${t.cb}`,
+        borderRadius: 16,
+        padding: 18,
+        cursor: "pointer",
+        transition: "all 0.18s"
+      },
+      onClick: () => {
+        setActiveRoom(room.id);
+        setView("room");
+      },
+      onMouseEnter: e => {
+        e.currentTarget.style.borderColor = t.accent;
+        e.currentTarget.style.transform = "translateY(-2px)";
+        e.currentTarget.style.boxShadow = `0 6px 24px ${t.ag}`;
+      },
+      onMouseLeave: e => {
+        e.currentTarget.style.borderColor = t.cb;
+        e.currentTarget.style.transform = "";
+        e.currentTarget.style.boxShadow = "";
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 17,
+        color: t.accent,
+        marginBottom: 3
+      }
+    }, room.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: t.muted
+      }
+    }, dict?.name || "Dicionário")), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: role.color,
+        background: `${role.color}20`,
+        padding: "3px 9px",
+        borderRadius: 20,
+        border: `1px solid ${role.color}40`,
+        flexShrink: 0
+      }
+    }, role.icon, " ", role.label)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 10,
+        flexWrap: "wrap",
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: t.muted
+      }
+    }, "\uD83D\uDC65 ", (room.members || []).length, " membros"), activeMissions > 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#22c55e"
+      }
+    }, "\uD83C\uDFAF ", activeMissions, " miss\xE3o", activeMissions !== 1 ? "s" : "", " ativa", activeMissions !== 1 ? "s" : ""), pending > 0 && (myRole === "creator" || myRole === "reviewer") && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#f59e0b"
+      }
+    }, "\uD83D\uDCCB ", pending, " pendente", pending !== 1 ? "s" : "")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: -8
+      }
+    }, (room.members || []).slice(0, 6).map((m, i) => /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      style: {
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 15,
+        background: t.surf,
+        border: `2px solid ${t.card}`,
+        marginLeft: i > 0 ? -8 : 0,
+        zIndex: 6 - i
+      }
+    }, m.avatar || "🧙")), (room.members || []).length > 6 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 10,
+        background: t.surf,
+        border: `2px solid ${t.card}`,
+        marginLeft: -8,
+        color: t.muted
+      }
+    }, "+", (room.members || []).length - 6)));
+  })));
+}
+function FirebaseSettingsBlock({
+  t,
+  notify
+}) {
+  const [cfg, setCfg] = useState(() => ld("vb_fb_config", null) || {});
+  const [show, setShow] = useState(false);
+  const fields = [["apiKey", "API Key"], ["authDomain", "Auth Domain"], ["projectId", "Project ID"], ["storageBucket", "Storage Bucket"], ["messagingSenderId", "Messaging Sender ID"], ["appId", "App ID"]];
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "7px 10px",
+    borderRadius: 8,
+    fontFamily: "monospace",
+    fontSize: 12,
+    outline: "none",
+    width: "100%"
+  };
+  const save = () => {
+    if (!cfg.apiKey || !cfg.projectId) {
+      notify("Preencha ao menos API Key e Project ID", "err");
+      return;
+    }
+    sv("vb_fb_config", cfg);
+    notify("Firebase salvo! Recarregue o app para ativar. ✅");
+  };
+  const clear = () => {
+    sv("vb_fb_config", null);
+    setCfg({});
+    notify("Firebase desativado.", "info");
+  };
+  const isActive = !!ld("vb_fb_config", null)?.apiKey;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 20,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, "\uD83D\uDD25 FIREBASE \u2014 COLABORA\xC7\xC3O EM TEMPO REAL", isActive && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      background: "rgba(34,197,94,0.15)",
+      color: "#22c55e",
+      padding: "2px 8px",
+      borderRadius: 20
+    }
+  }, "\u2713 configurado")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShow(s => !s),
+    style: {
+      padding: "4px 10px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 7,
+      cursor: "pointer",
+      fontSize: 12,
+      fontFamily: t.fB
+    }
+  }, show ? "▲ Ocultar" : "▼ Configurar")), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 12,
+      lineHeight: 1.6,
+      marginBottom: show ? 12 : 0
+    }
+  }, "Ative para: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "chat em grupo persistente"), " \xB7 ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "salas colaborativas online"), " \xB7 ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "hist\xF3rico de mensagens para todos")), show && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(245,158,11,0.08)",
+      border: "1px solid rgba(245,158,11,0.2)",
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 14,
+      fontSize: 12,
+      color: "#f59e0b",
+      lineHeight: 1.6
+    }
+  }, "\uD83D\uDCCB ", /*#__PURE__*/React.createElement("strong", null, "Como obter suas credenciais:"), /*#__PURE__*/React.createElement("br", null), "1. Acesse ", /*#__PURE__*/React.createElement("strong", null, "console.firebase.google.com"), /*#__PURE__*/React.createElement("br", null), "2. Crie um projeto \u2192 Adicionar app (Web) \u2192 Copie o objeto firebaseConfig", /*#__PURE__*/React.createElement("br", null), "3. Ative o Firestore Database (modo de teste para come\xE7ar)", /*#__PURE__*/React.createElement("br", null), "4. Cole cada campo abaixo e salve"), fields.map(([k, lb]) => /*#__PURE__*/React.createElement("div", {
+    key: k,
+    style: {
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 3
+    }
+  }, lb), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: cfg[k] || "",
+    onChange: e => setCfg(p => ({
+      ...p,
+      [k]: e.target.value.trim()
+    })),
+    placeholder: `${k}...`
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: save,
+    style: {
+      padding: "8px 18px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "\uD83D\uDD25 Salvar e Ativar Firebase"), isActive && /*#__PURE__*/React.createElement("button", {
+    onClick: clear,
+    style: {
+      padding: "8px 14px",
+      background: "rgba(239,68,68,0.1)",
+      color: "#ef4444",
+      border: "1px solid rgba(239,68,68,0.25)",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "Desativar"))));
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  VERBARIUM — AUTH + FIREBASE SYNC + GAMIFICAÇÃO EXPANDIDA
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── LEVEL TITLES ──────────────────────────────────────────────────────────────
+const LEVEL_TITLES = [{
+  min: 1,
+  max: 2,
+  title: "Aprendiz",
+  icon: "🌱"
+}, {
+  min: 3,
+  max: 4,
+  title: "Estudioso",
+  icon: "📖"
+}, {
+  min: 5,
+  max: 6,
+  title: "Linguista",
+  icon: "🔤"
+}, {
+  min: 7,
+  max: 9,
+  title: "Lexicógrafo",
+  icon: "📚"
+}, {
+  min: 10,
+  max: 14,
+  title: "Filólogo",
+  icon: "🏛️"
+}, {
+  min: 15,
+  max: 19,
+  title: "Arquiteto da Língua",
+  icon: "⚗️"
+}, {
+  min: 20,
+  max: 29,
+  title: "Mestre Conlanger",
+  icon: "🔮"
+}, {
+  min: 30,
+  max: 49,
+  title: "Grande Linguista",
+  icon: "🌟"
+}, {
+  min: 50,
+  max: 99,
+  title: "Lendário",
+  icon: "👑"
+}, {
+  min: 100,
+  max: 999,
+  title: "Imortal das Línguas",
+  icon: "⚡"
+}];
+function getLevelTitle(level) {
+  return LEVEL_TITLES.find(l => level >= l.min && level <= l.max) || LEVEL_TITLES[0];
+}
+
+// ── SRS (Spaced Repetition System — Anki-style) ───────────────────────────────
+function srsNextReview(correct, interval, easeFactor) {
+  // SM-2 algorithm simplified
+  if (correct) {
+    const newInterval = interval === 0 ? 1 : interval === 1 ? 6 : Math.round(interval * easeFactor);
+    const newEase = Math.max(1.3, easeFactor + 0.1);
+    return {
+      interval: newInterval,
+      easeFactor: newEase,
+      due: addDays(new Date(), newInterval).toISOString()
+    };
+  } else {
+    return {
+      interval: 1,
+      easeFactor: Math.max(1.3, easeFactor - 0.2),
+      due: addDays(new Date(), 1).toISOString()
+    };
+  }
+}
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function isDue(dueDate) {
+  return !dueDate || new Date(dueDate) <= new Date();
+}
+
+// ── DAILY CHALLENGE GENERATOR ─────────────────────────────────────────────────
+const CHALLENGE_TEMPLATES = [(n, tag) => ({
+  text: `Adicione ${n} palavras com a tag "${tag}"`,
+  type: "add_tagged",
+  target: n,
+  tag
+}), n => ({
+  text: `Jogue ${n} rodadas de Flashcard`,
+  type: "play_flash",
+  target: n
+}), n => ({
+  text: `Acerte ${n} palavras no jogo Associar`,
+  type: "play_match",
+  target: n
+}), n => ({
+  text: `Adicione ${n} novas frases ao fraseário`,
+  type: "add_phrases",
+  target: n
+}), n => ({
+  text: `Complete ${n} lição`,
+  type: "complete_lesson",
+  target: n
+})];
+function getTodayChallenge(allTags) {
+  const seed = new Date().toDateString();
+  const idx = seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % CHALLENGE_TEMPLATES.length;
+  const tag = allTags[Math.floor(Math.random() * Math.max(allTags.length, 1))] || "básico";
+  return {
+    ...CHALLENGE_TEMPLATES[idx](Math.floor(Math.random() * 3) + 2, tag),
+    id: seed
+  };
+}
+
+// ── FIREBASE AUTH BRIDGE ───────────────────────────────────────────────────────
+let authBridge = {
+  ready: false,
+  currentUser: null,
+  signInWithGoogle: () => Promise.reject("Firebase não configurado"),
+  signOut: () => Promise.resolve(),
+  onAuthChanged: cb => {
+    cb(null);
+    return () => {};
+  },
+  saveUserData: (uid, data) => Promise.resolve(),
+  loadUserData: uid => Promise.resolve(null),
+  saveDict: (uid, dict) => Promise.resolve(),
+  loadDicts: uid => Promise.resolve(null)
+};
+function activateAuthBridge() {
+  try {
+    if (!window.firebase?.auth) {
+      // Load Firebase Auth
+      const s = document.createElement("script");
+      s.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js";
+      s.onload = () => {
+        setupAuth();
+      };
+      document.head.appendChild(s);
+    } else {
+      setupAuth();
+    }
+  } catch (e) {
+    console.error("[Auth]", e);
+  }
+}
+function setupAuth() {
+  try {
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const provider = new firebase.auth.GoogleAuthProvider();
+    authBridge = {
+      ready: true,
+      currentUser: null,
+      signInWithGoogle: () => auth.signInWithPopup(provider),
+      signOut: () => auth.signOut(),
+      onAuthChanged: cb => auth.onAuthStateChanged(cb),
+      saveUserData: async (uid, data) => {
+        await db.collection("users").doc(uid).set(data, {
+          merge: true
+        });
+      },
+      loadUserData: async uid => {
+        const snap = await db.collection("users").doc(uid).get();
+        return snap.exists ? snap.data() : null;
+      },
+      saveDict: async (uid, dict) => {
+        // Save dict without audio (too large) — audio stays local
+        const d = {
+          ...dict,
+          entries: dict.entries.map(e => ({
+            ...e,
+            audio: null
+          }))
+        };
+        await db.collection("users").doc(uid).collection("dicts").doc(dict.id).set(d, {
+          merge: true
+        });
+      },
+      loadDicts: async uid => {
+        const snap = await db.collection("users").doc(uid).collection("dicts").get();
+        if (snap.empty) return null;
+        return snap.docs.map(d => d.data());
+      }
+    };
+    console.log("[Auth] Pronto ✓");
+  } catch (e) {
+    console.error("[Auth] setup:", e);
+  }
+}
+
+// ── LOGIN SCREEN ───────────────────────────────────────────────────────────────
+function LoginScreen({
+  t,
+  onSkip
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const handleGoogle = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      await authBridge.signInWithGoogle();
+    } catch (e) {
+      setError(e.message || "Erro ao fazer login. Tente novamente.");
+      setLoading(false);
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: t.bg,
+      padding: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 24,
+      padding: "40px 32px",
+      maxWidth: 420,
+      width: "100%",
+      textAlign: "center",
+      boxShadow: `0 20px 60px rgba(0,0,0,0.4)`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 32,
+      color: t.accent,
+      textShadow: `0 0 30px ${t.ag}`,
+      marginBottom: 6
+    }
+  }, "Verbarium"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 2,
+      marginBottom: 32
+    }
+  }, "PRO"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      color: t.text,
+      marginBottom: 8,
+      lineHeight: 1.6
+    }
+  }, "Entre com sua conta Google para sincronizar seus dicion\xE1rios em todos os dispositivos."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      marginBottom: 32,
+      lineHeight: 1.5
+    }
+  }, "Seus dados ficam salvos na nuvem com seguran\xE7a."), /*#__PURE__*/React.createElement("button", {
+    onClick: handleGoogle,
+    disabled: loading,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+      width: "100%",
+      padding: "13px 20px",
+      background: "#fff",
+      color: "#333",
+      border: "2px solid rgba(255,255,255,0.2)",
+      borderRadius: 14,
+      cursor: loading ? "wait" : "pointer",
+      fontFamily: t.fB,
+      fontSize: 15,
+      fontWeight: 600,
+      marginBottom: 14,
+      transition: "all 0.2s",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.2)"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "20",
+    height: "20",
+    viewBox: "0 0 48 48"
+  }, /*#__PURE__*/React.createElement("path", {
+    fill: "#EA4335",
+    d: "M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#4285F4",
+    d: "M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#FBBC05",
+    d: "M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+  }), /*#__PURE__*/React.createElement("path", {
+    fill: "#34A853",
+    d: "M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+  })), loading ? "Entrando…" : "Entrar com Google"), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#ef4444",
+      fontSize: 13,
+      marginBottom: 12,
+      background: "rgba(239,68,68,0.1)",
+      padding: "8px 12px",
+      borderRadius: 8
+    }
+  }, error), /*#__PURE__*/React.createElement("button", {
+    onClick: onSkip,
+    style: {
+      background: "transparent",
+      border: "none",
+      color: t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      textDecoration: "underline",
+      padding: "8px"
+    }
+  }, "Usar sem conta (apenas local)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 24,
+      fontSize: 11,
+      color: t.muted,
+      lineHeight: 1.6
+    }
+  }, "\uD83D\uDD12 Seus dados s\xE3o privados. Nunca compartilhamos com terceiros.", /*#__PURE__*/React.createElement("br", null), "\xC1udios gravados ficam no dispositivo por limita\xE7\xE3o de tamanho.")));
+}
+
+// ── USER HEADER BADGE ──────────────────────────────────────────────────────────
+function UserBadge({
+  user,
+  study,
+  t,
+  onSignOut
+}) {
+  const [open, setOpen] = useState(false);
+  const level = Math.floor((study.xp || 0) / 500) + 1;
+  const lt = getLevelTitle(level);
+  if (!user) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setOpen(o => !o),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      padding: "4px 10px 4px 4px",
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 20,
+      cursor: "pointer",
+      transition: "all 0.15s"
+    }
+  }, user.photoURL ? /*#__PURE__*/React.createElement("img", {
+    src: user.photoURL,
+    style: {
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      border: `1px solid ${t.cb}`
+    },
+    alt: ""
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      background: t.ag,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 14
+    }
+  }, user.displayName?.[0] || "?"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: t.text,
+      maxWidth: 80,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, user.displayName?.split(" ")[0] || "Usuário"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11
+    }
+  }, lt.icon)), open && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      right: 0,
+      top: "calc(100% + 6px)",
+      background: t.light ? "#faf4e8" : "#15121f",
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      minWidth: 200,
+      zIndex: 500,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+      animation: "slideUp 0.15s"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 12,
+      paddingBottom: 12,
+      borderBottom: `1px solid ${t.cb}`
+    }
+  }, user.photoURL ? /*#__PURE__*/React.createElement("img", {
+    src: user.photoURL,
+    style: {
+      width: 40,
+      height: 40,
+      borderRadius: "50%"
+    },
+    alt: ""
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 40,
+      borderRadius: "50%",
+      background: t.ag,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 20
+    }
+  }, user.displayName?.[0]), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.text,
+      fontWeight: 600
+    }
+  }, user.displayName), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted
+    }
+  }, user.email))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginBottom: 4
+    }
+  }, "N\xEDvel ", level, " \xB7 ", lt.icon, " ", lt.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      borderRadius: 99,
+      height: 5,
+      overflow: "hidden",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${(study.xp || 0) % 500 / 500 * 100}%`,
+      height: "100%",
+      background: t.accent,
+      borderRadius: 99
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 16,
+      marginBottom: 14,
+      fontSize: 12,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDD25 ", study.streak || 0, " dias"), /*#__PURE__*/React.createElement("span", null, "\u26A1 ", study.xp || 0, " XP total")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#22c55e",
+      background: "rgba(34,197,94,0.1)",
+      padding: "5px 10px",
+      borderRadius: 8,
+      marginBottom: 12
+    }
+  }, "\u2601\uFE0F Dados sincronizados na nuvem"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setOpen(false);
+      onSignOut();
+    },
+    style: {
+      width: "100%",
+      padding: "8px",
+      background: "rgba(239,68,68,0.1)",
+      color: "#ef4444",
+      border: "1px solid rgba(239,68,68,0.25)",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "Sair da conta")));
+}
+
+// ── SRS REVIEW SESSION ─────────────────────────────────────────────────────────
+function SRSReview({
+  entries,
+  srsData,
+  onUpdate,
+  onBack,
+  onXP,
+  t,
+  L
+}) {
+  const due = entries.filter(e => {
+    const s = srsData[e.id];
+    return !s || isDue(s.due);
+  });
+  const [idx, setIdx] = useState(0);
+  const [flipped, setFlip] = useState(false);
+  const [done, setDone] = useState(false);
+  const [reviewed, setReviewed] = useState(0);
+  if (due.length === 0) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 60
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 60,
+      marginBottom: 16
+    }
+  }, "\u2705"), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      marginBottom: 8
+    }
+  }, "Nenhuma revis\xE3o pendente!"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      marginBottom: 20
+    }
+  }, "Volte amanh\xE3 para revisar novas palavras."), /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: {
+      padding: "10px 24px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "Voltar"));
+  if (done || idx >= due.length) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 60
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 60,
+      marginBottom: 16
+    }
+  }, "\uD83E\uDDE0"), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      marginBottom: 8
+    }
+  }, "Revis\xE3o Conclu\xEDda!"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      marginBottom: 20
+    }
+  }, reviewed, " palavras revisadas"), /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: {
+      padding: "10px 24px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "Voltar"));
+  const card = due[idx];
+  const srs = srsData[card.id] || {
+    interval: 0,
+    easeFactor: 2.5,
+    due: null
+  };
+  const answer = correct => {
+    const next = srsNextReview(correct, srs.interval, srs.easeFactor);
+    onUpdate(card.id, next);
+    if (correct) onXP(10);
+    setReviewed(r => r + 1);
+    if (idx < due.length - 1) {
+      setIdx(i => i + 1);
+      setFlip(false);
+    } else setDone(true);
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "6px 12px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "x"
+  }), "Voltar"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 15
+    }
+  }, "\uD83E\uDDE0 Revis\xE3o Espa\xE7ada (SRS)"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: "auto",
+      color: t.muted,
+      fontSize: 12
+    }
+  }, idx + 1, "/", due.length)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(180,140,255,0.08)",
+      border: "1px solid rgba(180,140,255,0.2)",
+      borderRadius: 10,
+      padding: "8px 14px",
+      marginBottom: 16,
+      fontSize: 12,
+      color: t.muted
+    }
+  }, "\uD83D\uDCC5 Pr\xF3xima revis\xE3o ap\xF3s responder: ", srs.interval <= 1 ? "amanhã" : srs.interval <= 6 ? "em " + srs.interval + " dias" : "em " + srs.interval + " dias"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 480,
+      margin: "0 auto",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setFlip(f => !f),
+    style: {
+      background: t.card,
+      border: `1px solid ${flipped ? t.accent : t.cb}`,
+      borderRadius: 20,
+      padding: "44px 28px",
+      cursor: "pointer",
+      minHeight: 200,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      transition: "all 0.3s",
+      boxShadow: flipped ? `0 0 30px ${t.ag}` : "none"
+    }
+  }, !flipped ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 32,
+      color: t.accent,
+      marginBottom: 6
+    }
+  }, card.word), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      fontStyle: "italic"
+    }
+  }, card.pronunciation), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 16
+    }
+  }, "Toque para revelar")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginBottom: 4
+    }
+  }, card.word), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 22,
+      color: t.accent,
+      marginBottom: 10
+    }
+  }, card.translation), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.text,
+      lineHeight: 1.6,
+      maxWidth: 340
+    }
+  }, card.definition))), flipped && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      justifyContent: "center",
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => answer(false),
+    style: {
+      flex: 1,
+      padding: "10px",
+      background: "rgba(239,68,68,0.15)",
+      color: "#ef4444",
+      border: "1px solid rgba(239,68,68,0.35)",
+      borderRadius: 12,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDE30 Dif\xEDcil"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => answer(true),
+    style: {
+      flex: 1,
+      padding: "10px",
+      background: "rgba(245,158,11,0.15)",
+      color: "#f59e0b",
+      border: "1px solid rgba(245,158,11,0.35)",
+      borderRadius: 12,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83E\uDD14 Lembrei"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const s = srsData[card.id] || {
+        interval: 0,
+        easeFactor: 2.5
+      };
+      answer(true);
+    },
+    style: {
+      flex: 1,
+      padding: "10px",
+      background: "rgba(34,197,94,0.15)",
+      color: "#22c55e",
+      border: "1px solid rgba(34,197,94,0.35)",
+      borderRadius: 12,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "\uD83D\uDE04 F\xE1cil"))));
+}
+
+// ── DAILY CHALLENGE WIDGET ─────────────────────────────────────────────────────
+function DailyChallengeWidget({
+  challenge,
+  progress,
+  t
+}) {
+  if (!challenge) return null;
+  const done = (progress || 0) >= challenge.target;
+  const pct = Math.min(100, Math.round((progress || 0) / challenge.target * 100));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: done ? "rgba(34,197,94,0.08)" : t.card,
+      border: `1px solid ${done ? "rgba(34,197,94,0.4)" : t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20
+    }
+  }, "\uD83D\uDCC5"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 13,
+      color: done ? "#22c55e" : t.accent
+    }
+  }, "Desafio de Hoje"), done && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      background: "rgba(34,197,94,0.15)",
+      color: "#22c55e",
+      padding: "2px 8px",
+      borderRadius: 20,
+      marginLeft: "auto"
+    }
+  }, "\u2705 Conclu\xEDdo!")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.text,
+      marginBottom: 8
+    }
+  }, challenge.text), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      borderRadius: 99,
+      height: 6,
+      overflow: "hidden",
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${pct}%`,
+      height: "100%",
+      background: done ? "#22c55e" : `linear-gradient(90deg,${t.accent}99,${t.accent})`,
+      borderRadius: 99,
+      transition: "width 0.5s"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontSize: 11,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("span", null, progress || 0, "/", challenge.target), /*#__PURE__*/React.createElement("span", null, "+50 XP ao completar")));
+}
+
+// ── LEADERBOARD ────────────────────────────────────────────────────────────────
+function Leaderboard({
+  room,
+  t
+}) {
+  const members = room?.members || [];
+  const sorted = [...members].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+  if (sorted.length === 0) return null;
+  const medals = ["🥇", "🥈", "🥉"];
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 12,
+      letterSpacing: 1,
+      marginBottom: 12
+    }
+  }, "\uD83C\uDFC6 RANKING DA SALA"), sorted.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    key: m.id,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "8px 0",
+      borderBottom: i < sorted.length - 1 ? `1px solid ${t.cb}40` : ""
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20,
+      width: 28,
+      textAlign: "center"
+    }
+  }, medals[i] || `${i + 1}`), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20
+    }
+  }, m.avatar || "🧙"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.text
+    }
+  }, m.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted
+    }
+  }, getLevelTitle(Math.floor((m.xp || 0) / 500) + 1).title)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "right"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.accent,
+      fontFamily: t.fD
+    }
+  }, m.xp || 0, " XP"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: t.muted
+    }
+  }, "Nv.", Math.floor((m.xp || 0) / 500) + 1)))));
+}
+
 // ── SETTINGS SECTION ──────────────────────────────────────────────────────────
 function SettSection({
   dict,
@@ -5361,7 +9035,10 @@ function SettSection({
     style: {
       color: t.text
     }
-  }, "100% offline."))));
+  }, "100% offline."))), /*#__PURE__*/React.createElement(FirebaseSettingsBlock, {
+    t: t,
+    notify: notify
+  }));
 }
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
@@ -5387,6 +9064,16 @@ function Verbarium() {
   const [drawer, setDrawer] = useState(false);
   const [notif, setNotif] = useState(null);
   const [importPanel, setImportPanel] = useState(false);
+  const [localUser, setLocalUser] = useState(() => getLocalUser());
+  const [fbReady, setFbReady] = useState(false);
+  const [fbConfig, setFbConfig] = useState(() => ld("vb_fb_config", null));
+  const [authUser, setAuthUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [srsData, setSrsData] = useState(() => ld("vb_srs", {}));
+  const [gameMode2, setGameMode2] = useState(null);
+  const [dailyChallenge, setDailyChallenge] = useState(null);
+  const [challengeProgress, setChallengeProgress] = useState(() => ld("vb_daily_prog", {}));
   const [customThemeCfg, setCustomThemeCfgRaw] = useState(() => ld("vb_custom_cfg", DEFAULT_CUSTOM_CFG));
   const setCustomThemeCfg = v => {
     setCustomThemeCfgRaw(v);
@@ -5402,6 +9089,100 @@ function Verbarium() {
   };
   useEffect(() => sv("vb_dicts", dicts), [dicts]);
   useEffect(() => sv("vb_study", study), [study]);
+  useEffect(() => {
+    if (fbConfig?.apiKey) {
+      const ok = initFirebase(fbConfig);
+      if (ok) {
+        setTimeout(() => {
+          const isReady = !!window.firebase?.apps?.length;
+          setFbReady(isReady);
+          if (isReady) {
+            activateAuthBridge();
+            setTimeout(() => {
+              authBridge.onAuthChanged(async user => {
+                setAuthUser(user);
+                setAuthReady(true);
+                if (user) {
+                  // Load cloud data on login
+                  try {
+                    const cloudDicts = await authBridge.loadDicts(user.uid);
+                    if (cloudDicts && cloudDicts.length > 0) {
+                      // Merge: keep local audio, use cloud content
+                      setDicts(local => {
+                        const merged = cloudDicts.map(cd => {
+                          const ld2 = local.find(l => l.id === cd.id);
+                          if (!ld2) return cd;
+                          return {
+                            ...cd,
+                            entries: cd.entries.map(ce => {
+                              const le = ld2.entries.find(e => e.id === ce.id);
+                              return le ? {
+                                ...ce,
+                                audio: le.audio
+                              } : ce;
+                            })
+                          };
+                        });
+                        const newDicts = [...merged, ...local.filter(l => !cloudDicts.find(c => c.id === l.id))];
+                        return newDicts;
+                      });
+                    }
+                    const cloudStudy = await authBridge.loadUserData(user.uid);
+                    if (cloudStudy?.study) {
+                      setStudy(s => ({
+                        ...cloudStudy.study,
+                        xp: Math.max(s.xp || 0, cloudStudy.study.xp || 0)
+                      }));
+                    }
+                  } catch (e) {
+                    console.warn("[Auth] load:", e);
+                  }
+                }
+              });
+            }, 1500);
+          }
+        }, 2000);
+      }
+    }
+  }, [fbConfig]);
+
+  // Auto-save to Firebase when dicts change (if logged in)
+  useEffect(() => {
+    if (authUser && authBridge.ready) {
+      dicts.forEach(d => {
+        authBridge.saveDict(authUser.uid, d).catch(e => console.warn("[Sync]", e));
+      });
+    }
+  }, [dicts, authUser]);
+
+  // Auto-save study progress
+  useEffect(() => {
+    sv("vb_srs", srsData);
+    if (authUser && authBridge.ready) {
+      authBridge.saveUserData(authUser.uid, {
+        study,
+        srsData
+      }).catch(() => {});
+    }
+  }, [study, srsData, authUser]);
+
+  // Daily challenge
+  useEffect(() => {
+    const tags = [...new Set((dict?.entries || []).flatMap(e => e.tags || []))];
+    const c = getTodayChallenge(tags);
+    setDailyChallenge(c);
+    // Reset progress if new day
+    const today = new Date().toDateString();
+    const saved = ld("vb_daily_prog", {});
+    if (saved._date !== today) {
+      sv("vb_daily_prog", {
+        _date: today
+      });
+      setChallengeProgress({
+        _date: today
+      });
+    }
+  }, []);
   useEffect(() => {
     const today = new Date().toDateString();
     if (study.lastSession !== today) {
@@ -5434,6 +9215,24 @@ function Verbarium() {
     ...s,
     xp: (s.xp || 0) + n
   }));
+  const updateSrs = (wordId, data) => setSrsData(s => ({
+    ...s,
+    [wordId]: data
+  }));
+  const trackChallenge = (type, amount = 1) => {
+    if (!dailyChallenge) return;
+    if (dailyChallenge.type !== type && dailyChallenge.type !== "any") return;
+    const newProg = {
+      ...challengeProgress
+    };
+    newProg[dailyChallenge.id] = (newProg[dailyChallenge.id] || 0) + amount;
+    if (newProg[dailyChallenge.id] >= dailyChallenge.target && !challengeProgress[dailyChallenge.id + "_rewarded"]) {
+      newProg[dailyChallenge.id + "_rewarded"] = true;
+      addXP(50);
+    }
+    setChallengeProgress(newProg);
+    sv("vb_daily_prog", newProg);
+  };
   const addMem = (id, ok) => setStudy(s => {
     const cur = s.memScores?.[id] || {
       c: 0,
@@ -5527,6 +9326,31 @@ function Verbarium() {
     setGame(null);
     setDrawer(false);
   };
+  const handleAddToDict = (data, type, dictId) => {
+    setDicts(ds => ds.map(d => {
+      if (d.id !== dictId) return d;
+      if (type === "phrase") {
+        return {
+          ...d,
+          phrases: [...(d.phrases || []), {
+            ...data,
+            id: Date.now(),
+            created: new Date().toISOString().split("T")[0]
+          }]
+        };
+      }
+      return {
+        ...d,
+        entries: [...d.entries, {
+          ...data,
+          id: Date.now(),
+          created: new Date().toISOString().split("T")[0]
+        }]
+      };
+    }));
+    addXP(20);
+    notify("Contribuição adicionada ao dicionário! +20 XP ✨");
+  };
   const NAV = [{
     id: "home",
     n: "home",
@@ -5552,6 +9376,10 @@ function Verbarium() {
     n: "lesson",
     lb: L.nav.lessons
   }, {
+    id: "salas",
+    n: "globe",
+    lb: "Salas"
+  }, {
     id: "games",
     n: "game",
     lb: L.nav.games
@@ -5564,6 +9392,10 @@ function Verbarium() {
     n: "settings",
     lb: L.nav.settings
   }];
+  const dueCount = (dict?.entries || []).filter(e => {
+    const s = srsData[e.id];
+    return !s || isDue(s.due);
+  }).length;
   const BNAV = [{
     id: "home",
     n: "home",
@@ -5573,13 +9405,13 @@ function Verbarium() {
     n: "book",
     lb: L.nav.dict
   }, {
+    id: "salas",
+    n: "globe",
+    lb: "Salas"
+  }, {
     id: "games",
     n: "game",
     lb: L.nav.games
-  }, {
-    id: "lessons",
-    n: "lesson",
-    lb: L.nav.lessons
   }, {
     id: "settings",
     n: "settings",
@@ -5712,6 +9544,12 @@ function Verbarium() {
   }, /*#__PURE__*/React.createElement(Ic, {
     n: "plus"
   }), /*#__PURE__*/React.createElement("span", null, "Novo Idioma")));
+
+  // Show login screen
+  if (showLogin && !authUser) return /*#__PURE__*/React.createElement(LoginScreen, {
+    t: t,
+    onSkip: () => setShowLogin(false)
+  });
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("style", null, css), /*#__PURE__*/React.createElement("div", {
     className: "app"
   }, /*#__PURE__*/React.createElement("div", {
@@ -5756,7 +9594,28 @@ function Verbarium() {
     style: {
       color: t.muted
     }
-  }, xpInLvl, "/500XP")))), /*#__PURE__*/React.createElement("div", {
+  }, xpInLvl, "/500XP"))), authUser ? /*#__PURE__*/React.createElement(UserBadge, {
+    user: authUser,
+    study: study,
+    t: t,
+    onSignOut: () => authBridge.signOut()
+  }) : fbReady && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowLogin(true),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "5px 12px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 20,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12,
+      flexShrink: 0
+    }
+  }, "\uD83D\uDD11 Entrar")), /*#__PURE__*/React.createElement("div", {
     className: "body"
   }, !screen.mobile && /*#__PURE__*/React.createElement("div", {
     className: "sb"
@@ -5894,7 +9753,51 @@ function Verbarium() {
       color: t.muted,
       marginTop: 2
     }
-  }, lb)))), /*#__PURE__*/React.createElement("div", {
+  }, lb)))), dailyChallenge && /*#__PURE__*/React.createElement(DailyChallengeWidget, {
+    challenge: dailyChallenge,
+    progress: challengeProgress[dailyChallenge.id],
+    t: t
+  }), dueCount > 0 && /*#__PURE__*/React.createElement("div", {
+    onClick: () => {
+      setTab("games");
+      setGameMode2("srs");
+    },
+    style: {
+      background: "rgba(245,158,11,0.08)",
+      border: "1px solid rgba(245,158,11,0.3)",
+      borderRadius: 12,
+      padding: "12px 16px",
+      marginBottom: 14,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      transition: "all 0.18s"
+    },
+    onMouseEnter: e => e.currentTarget.style.borderColor = "#f59e0b",
+    onMouseLeave: e => e.currentTarget.style.borderColor = "rgba(245,158,11,0.3)"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 24
+    }
+  }, "\uD83E\uDDE0"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: "#f59e0b",
+      fontFamily: t.fD
+    }
+  }, dueCount, " palavras para revisar"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted
+    }
+  }, "Revis\xE3o espa\xE7ada (SRS) \xB7 Toque para come\xE7ar")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: "auto",
+      color: t.muted,
+      fontSize: 18
+    }
+  }, "\u203A")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: t.fD,
       color: t.accent,
@@ -6443,6 +10346,13 @@ function Verbarium() {
     desc: "Preencha o tabuleiro de palavras cruzadas.",
     min: 3,
     xp: 40
+  }, {
+    id: "srs",
+    ic: "🧠",
+    lb: "Revisão Espaçada",
+    desc: `Método científico Anki-style. ${dueCount} palavra${dueCount !== 1 ? "s" : ""} para revisar hoje.`,
+    min: 1,
+    xp: 10
   }].map(g => /*#__PURE__*/React.createElement("div", {
     key: g.id,
     style: {
@@ -6535,6 +10445,17 @@ function Verbarium() {
   }), tab === "games" && game === "cross" && /*#__PURE__*/React.createElement(CrossGame, {
     entries: allE,
     onBack: () => setGame(null),
+    onXP: addXP,
+    t: t,
+    L: L
+  }), tab === "games" && (game === "srs" || gameMode2 === "srs") && /*#__PURE__*/React.createElement(SRSReview, {
+    entries: allE,
+    srsData: srsData,
+    onUpdate: updateSrs,
+    onBack: () => {
+      setGame(null);
+      setGameMode2(null);
+    },
     onXP: addXP,
     t: t,
     L: L
@@ -6649,7 +10570,18 @@ function Verbarium() {
       color: "#22c55e",
       fontSize: 18
     }
-  }, "\u2B50")))), tab === "settings" && /*#__PURE__*/React.createElement(SettSection, {
+  }, "\u2B50")))), tab === "salas" && /*#__PURE__*/React.createElement(RoomsSection, {
+    dicts: dicts,
+    user: localUser,
+    setUser: u => {
+      setLocalUser(u);
+      saveLocalUser(u);
+    },
+    onAddToDict: handleAddToDict,
+    t: t,
+    notify: notify,
+    fbReady: fbReady
+  }), tab === "settings" && /*#__PURE__*/React.createElement(SettSection, {
     dict: dict,
     theme: theme,
     setTheme: setTheme,
@@ -6660,7 +10592,8 @@ function Verbarium() {
     L: L,
     notify: notify,
     customThemeCfg: customThemeCfg,
-    setCustomThemeCfg: setCustomThemeCfg
+    setCustomThemeCfg: setCustomThemeCfg,
+    fbReady: fbReady
   }))), /*#__PURE__*/React.createElement("div", {
     className: "bnav"
   }, BNAV.map(item => /*#__PURE__*/React.createElement("div", {
@@ -7050,22 +10983,40 @@ function Verbarium() {
   }, notif.type === "err" ? "❌" : notif.type === "info" ? "ℹ️" : "✅", " ", notif.msg)));
 }
 
-
 try{
   var rootEl=document.getElementById('root');
   var reactRoot=ReactDOM.createRoot(rootEl);
   reactRoot.render(React.createElement(Verbarium));
   requestAnimationFrame(function(){requestAnimationFrame(function(){hideSplash();});});
 }catch(err){
-  console.error('Verbarium error:',err);
-  document.getElementById('splash').innerHTML='<div style="color:#ff6060;font-family:monospace;padding:24px;max-width:320px;text-align:center"><div style="font-size:32px;margin-bottom:12px">⚠️</div><b>Erro</b><br/><br/><small>'+err.message+'</small></div>';
+  console.error('Verbarium:',err);
+  document.getElementById('splash').innerHTML='<div style="color:#ff6060;font-family:monospace;padding:24px;max-width:340px;text-align:center"><div style="font-size:32px;margin-bottom:12px">⚠️</div><b>Erro ao iniciar</b><br/><br/><small>'+err.message+'</small></div>';
 }
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('sw.js')
-      .then(function(r){console.log('[SW]',r.scope);})
+      .then(function(reg){
+        console.log('[SW] Registrado:',reg.scope);
+        // Check for updates every 60 seconds
+        setInterval(function(){reg.update();},60000);
+        // Detect new version installing
+        reg.addEventListener('updatefound',function(){
+          var newSW = reg.installing;
+          newSW.addEventListener('statechange',function(){
+            if(newSW.state==='installed' && navigator.serviceWorker.controller){
+              pendingNewSW = newSW;
+              showUpdateBanner();
+            }
+          });
+        });
+      })
       .catch(function(e){console.warn('[SW]',e);});
+    // When SW activates new version, reload
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(!refreshing){ refreshing=true; window.location.reload(); }
+    });
   });
 }
 
