@@ -2078,6 +2078,204 @@ function EntryForm({
   }, "Cancelar")));
 }
 
+
+function PhraseForm({
+  phrase,
+  onSave,
+  onCancel,
+  t,
+  L
+}) {
+  const [f, setF] = useState(phrase || {
+    phrase: "",
+    translation: "",
+    context: "",
+    tags: [],
+    notes: "",
+    audio: null
+  });
+  const [ti, setTi] = useState("");
+  const s = (k, v) => setF(p => ({
+    ...p,
+    [k]: v
+  }));
+  const addTag = e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const val = ti.trim();
+      if (!val) return;
+      if ((f.tags || []).includes(val)) {
+        setTi("");
+        return;
+      }
+      s("tags", [...(f.tags || []), val]);
+      setTi("");
+    }
+  };
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "8px 12px",
+    borderRadius: 9,
+    fontFamily: t.fB,
+    fontSize: 14,
+    outline: "none",
+    width: "100%"
+  };
+  const lbl = {
+    fontSize: 9,
+    color: t.muted,
+    fontFamily: t.fD,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    display: "block",
+    marginBottom: 4
+  };
+  const hint = {
+    fontSize: 10,
+    color: t.muted,
+    fontStyle: "italic",
+    marginBottom: 6,
+    lineHeight: 1.45
+  };
+  const g = {
+    marginBottom: 14
+  };
+  const isEmpty = !phrase?.id;
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: g
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Frase *"), isEmpty && /*#__PURE__*/React.createElement("div", {
+    style: hint
+  }, "Digite a frase completa na conlang. Ex: ", /*#__PURE__*/React.createElement("em", null, "Lohang, chenji mei soa.")), /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: 88,
+      resize: "vertical"
+    },
+    value: f.phrase,
+    onChange: e => s("phrase", e.target.value),
+    placeholder: "Ex: Lohang, chenji mei soa."
+  })), /*#__PURE__*/React.createElement("div", {
+    style: g
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Tradução *"), isEmpty && /*#__PURE__*/React.createElement("div", {
+    style: hint
+  }, "Escreva a tradução natural da frase. Ex: ", /*#__PURE__*/React.createElement("em", null, "Olá, minha língua está viva.")), /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: 70,
+      resize: "vertical"
+    },
+    value: f.translation,
+    onChange: e => s("translation", e.target.value),
+    placeholder: "Ex: Olá, minha língua está viva."
+  })), /*#__PURE__*/React.createElement("div", {
+    style: g
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Contexto"), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: f.context || "",
+    onChange: e => s("context", e.target.value),
+    placeholder: "Ex: saudação, oração, conversa formal, despedida"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: g
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Tags"), /*#__PURE__*/React.createElement("div", {
+    style: hint
+  }, "Digite uma tag e pressione Enter. Ex: ", /*#__PURE__*/React.createElement("em", null, "cotidiano"), ", ", /*#__PURE__*/React.createElement("em", null, "fé"), ", ", /*#__PURE__*/React.createElement("em", null, "saudação")), /*#__PURE__*/React.createElement("input", {
+    style: inp,
+    value: ti,
+    onChange: e => setTi(e.target.value),
+    onKeyDown: addTag,
+    placeholder: "Digite uma tag e pressione Enter..."
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 4,
+      marginTop: 6
+    }
+  }, (f.tags || []).map(tag => /*#__PURE__*/React.createElement("span", {
+    key: tag,
+    style: {
+      fontSize: 10,
+      background: t.tag,
+      color: t.tagT,
+      padding: "2px 8px",
+      borderRadius: 20,
+      cursor: "pointer"
+    },
+    onClick: () => s("tags", (f.tags || []).filter(x => x !== tag))
+  }, tag, " \u2715")))), /*#__PURE__*/React.createElement("div", {
+    style: g
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Notas"), /*#__PURE__*/React.createElement("textarea", {
+    style: {
+      ...inp,
+      minHeight: 64,
+      resize: "vertical"
+    },
+    value: f.notes || "",
+    onChange: e => s("notes", e.target.value),
+    placeholder: "Observações de uso, formalidade, variação regional, sentido figurado..."
+  })), /*#__PURE__*/React.createElement("div", {
+    style: g
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Áudio"), /*#__PURE__*/React.createElement(AudioRec, {
+    existing: f.audio,
+    onSave: v => s("audio", v),
+    accent: t.accent
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "9px 18px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    },
+    onClick: () => onSave(f)
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "check"
+  }), phrase?.id ? "Salvar" : "Adicionar"), /*#__PURE__*/React.createElement("button", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "9px 13px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    },
+    onClick: onCancel
+  }, "Cancelar")));
+}
+
 // ── GAME: FIND TRANSLATION / FIND WORD ────────────────────────────────────────
 function FindGame({
   entries,
@@ -5640,6 +5838,13 @@ const ROLES = {
     icon: "👁️"
   }
 };
+const APP_ADMIN_EMAILS = ["academiadeconlangs@gmail.com"];
+function normalizeEmail(v) {
+  return String(v || "").trim().toLowerCase();
+}
+function isAppAdmin(authUser) {
+  return APP_ADMIN_EMAILS.includes(normalizeEmail(authUser?.email));
+}
 
 // ── LOCAL USER ─────────────────────────────────────────────────────────────────
 function getLocalUser() {
@@ -5704,7 +5909,7 @@ function initFirebase(config) {
     return false;
   }
   try {
-    const scripts = ["https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"];
+    const scripts = ["https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js", "https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"];
     let loaded = 0;
     const tryActivate = () => {
       loaded++;
@@ -7334,6 +7539,7 @@ function MembersPanel({
 function RoomSettingsPanel({
   room,
   user,
+  authUser,
   onUpdateRoom,
   dict,
   dicts,
@@ -7341,13 +7547,14 @@ function RoomSettingsPanel({
   notify
 }) {
   const myRole = room.members?.find(m => m.id === user.id)?.role;
-  if (myRole !== "creator") return /*#__PURE__*/React.createElement("div", {
+  const canManageRoom = myRole === "creator" || isAppAdmin(authUser);
+  if (!canManageRoom) return /*#__PURE__*/React.createElement("div", {
     style: {
       color: t.muted,
       padding: 20,
       fontSize: 13
     }
-  }, "Apenas o criador pode acessar as configura\xE7\xF5es da sala.");
+  }, "Apenas o criador da sala ou o administrador do app pode acessar as configurações da sala.");
   const [settings, setSettings] = useState(room.settings || {
     requireApproval: true,
     inviteExpiry: null
@@ -7482,7 +7689,7 @@ function RoomDashboard({
   notify,
   fbReady
 }) {
-  const [activeTab, setActiveTab] = useState("missions");
+  const [activeTab, setActiveTab] = useState(room?.isPublic ? "chat" : "missions");
   const tabs = [{
     id: "missions",
     icon: "🎯",
@@ -7517,7 +7724,8 @@ function RoomDashboard({
   };
   const pending = (room.pendingContributions || []).length;
   const myRole = room.members?.find(m => m.id === user.id)?.role || "observer";
-  const canApprove = myRole === "creator" || myRole === "reviewer";
+  const adminUser = isAppAdmin(authUser);
+  const canApprove = myRole === "creator" || myRole === "reviewer" || adminUser;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -7555,12 +7763,7 @@ function RoomDashboard({
       color: t.muted,
       marginTop: 3
     }
-  }, dict?.name || "Dicionário", " \xB7 ", (room.members || []).length, " membros \xB7 ID: ", /*#__PURE__*/React.createElement("code", {
-    style: {
-      color: t.accent,
-      fontFamily: "monospace"
-    }
-  }, room.id))), /*#__PURE__*/React.createElement("div", {
+  }, dict?.name || "Dicionário", " \xB7 ", (room.members || []).length, " membros")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -7659,6 +7862,7 @@ function RoomDashboard({
   }), activeTab === "roomSettings" && /*#__PURE__*/React.createElement(RoomSettingsPanel, {
     room: room,
     user: user,
+    authUser: authUser,
     onUpdateRoom: onUpdateRoom,
     dict: dict,
     dicts: dicts,
@@ -7691,6 +7895,7 @@ function RoomsSection({
   const [showAdminPass, setShowAdminPass] = useState(false);
   const ADMIN_PASSWORD = "541350as*";
   const PUBLIC_ROOM_ID = "verbarium-public-2026";
+  const adminUser = isAppAdmin(authUser);
 
   // ── Require Google login ──
   if (!authUser) {
@@ -7796,6 +8001,22 @@ function RoomsSection({
     }));
   }
 
+  useEffect(() => {
+    if (!authUser) return;
+    setUser(prev => {
+      const next = {
+        ...(prev || {}),
+        id: authUser.uid,
+        email: authUser.email || prev?.email || "",
+        name: authUser.displayName || prev?.name || "",
+        avatar: authUser.photoURL || prev?.avatar || "🧙",
+        isAdmin: isAppAdmin(authUser)
+      };
+      saveLocalUser(next);
+      return next;
+    });
+  }, [authUser?.uid, authUser?.email, authUser?.displayName, authUser?.photoURL]);
+
   // ── Ensure public room is in list ──
   const ensurePublicRoom = () => {
     const pub = rooms.find(r => r.id === PUBLIC_ROOM_ID);
@@ -7811,7 +8032,7 @@ function RoomsSection({
           id: authUser.uid,
           name: authUser.displayName,
           avatar: authUser.photoURL || "🧙",
-          role: "contributor",
+          role: adminUser ? "creator" : "contributor",
           joinedAt: tsNow()
         }],
         missions: [],
@@ -7836,7 +8057,7 @@ function RoomsSection({
           id: authUser.uid,
           name: authUser.displayName,
           avatar: authUser.photoURL || "🧙",
-          role: "contributor",
+          role: adminUser ? "creator" : "contributor",
           joinedAt: tsNow()
         }]
       } : r);
@@ -7860,7 +8081,7 @@ function RoomsSection({
   const createRoom = () => {
     if (!creating.name.trim()) return;
     // Admin password check
-    if (adminPass !== ADMIN_PASSWORD) {
+    if (!adminUser && adminPass !== ADMIN_PASSWORD) {
       notify("Senha de administrador incorreta.", "err");
       return;
     }
@@ -7910,13 +8131,14 @@ function RoomsSection({
         const snap = await firebase.firestore().collection("rooms").doc(id).get();
         if (snap.exists) {
           const room = snap.data();
-          const alreadyMember = room.members?.find(m => m.id === user.id);
+          const effectiveUserId = authUser?.uid || user.id;
+          const alreadyMember = room.members?.find(m => m.id === effectiveUserId);
           if (!alreadyMember) {
             room.members = [...(room.members || []), {
-              id: user.id,
-              name: user.name,
-              avatar: user.avatar,
-              role: room.settings?.defaultRole || "contributor",
+              id: effectiveUserId,
+              name: authUser?.displayName || user.name,
+              avatar: authUser?.photoURL || user.avatar,
+              role: adminUser ? "creator" : room.settings?.defaultRole || "contributor",
               joinedAt: tsNow()
             }];
             await fbBridge.syncRoom(room);
@@ -8414,7 +8636,30 @@ function RoomsSection({
         marginLeft: -8,
         color: t.muted
       }
-    }, "+", (room.members || []).length - 6)));
+    }, "+", (room.members || []).length - 6))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "flex-end",
+        marginTop: 12
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        setActiveRoom(room.id);
+        setView("room");
+      },
+      style: {
+        padding: "8px 12px",
+        borderRadius: 10,
+        border: `1px solid ${t.cb}`,
+        background: t.ag,
+        color: t.accent,
+        cursor: "pointer",
+        fontFamily: t.fB,
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }, room.isPublic ? "Conversar" : myMember ? "Entrar" : "Abrir"));
   })));
 }
 function FirebaseSettingsBlock({
@@ -13215,34 +13460,73 @@ function TextGeneratorPage({
   t,
   notify
 }) {
-  const [templates, setTemplates] = useState(["{SUBS} {VERBO}.", "{SUBS} {VERBO} {SUBS}.", "{ADJ} {SUBS} {VERBO} {ADV}.", "{SUBS} {VERBO} {PREP} {SUBS}."]);
+  const [templates, setTemplates] = useState(["{SUJ} {VERBO}.", "{SUJ} {VERBO} {OBJ}.", "{ADJ} {SUJ} {VERBO} {ADV}.", "{SUJ} {VERBO} {PREP} {OBJ}.", "{SUJ} {VERBO} {OBJ} {ADV}.", "{VSO}", "{SVO}", "{SOV}"]);
   const [newTpl, setNewTpl] = useState("");
   const [generated, setGenerated] = useState([]);
   const [count, setCount] = useState(5);
   const entries = dict?.entries || [];
-  const byClass = cls => entries.filter(e => e.class === cls);
-  const pick = arr => arr.length ? arr[Math.floor(Math.random() * arr.length)].word : "...";
+  const byClass = (...classes) => entries.filter(e => classes.includes(e.class));
+  const pickWord = (arr, fallback = "...") => arr.length ? arr[Math.floor(Math.random() * arr.length)].word : fallback;
+  const buildSyntaxPattern = order => {
+    const parts = (order || "").split("");
+    return parts.map(part => {
+      if (part === "S") return "{SUJ}";
+      if (part === "V") return "{VERBO}";
+      if (part === "O") return "{OBJ}";
+      return part;
+    }).join(" ");
+  };
   const generate = () => {
-    const subst = byClass("substantivo");
-    const verb = byClass("verbo");
-    const adj = byClass("adjetivo");
-    const adv = byClass("advérbio");
-    const prep = byClass("preposição");
-    const conj = byClass("conjunção");
-    if (!subst.length || !verb.length) {
-      notify("Adicione substantivos e verbos ao dicionário para gerar frases.", "info");
+    const nouns = byClass("substantivo");
+    const verbs = byClass("verbo");
+    const adjs = byClass("adjetivo");
+    const advs = byClass("advérbio");
+    const preps = byClass("preposição");
+    const conjs = byClass("conjunção");
+    const prons = byClass("pronome");
+    const arts = byClass("artigo");
+    const nums = byClass("numeral");
+    const interjs = byClass("interjeição");
+    const particles = byClass("partícula");
+    const subjects = [...prons, ...nouns];
+    const objects = [...nouns, ...prons];
+    if (!subjects.length || !verbs.length) {
+      notify("Adicione pelo menos sujeitos/pronomes ou substantivos e também verbos para gerar frases.", "info");
       return;
     }
+    const tokenResolvers = {
+      "{SUBS}": () => pickWord(nouns, pickWord(subjects)),
+      "{SUJ}": () => pickWord(subjects),
+      "{OBJ}": () => pickWord(objects, pickWord(nouns, pickWord(subjects))),
+      "{VERBO}": () => pickWord(verbs),
+      "{ADJ}": () => pickWord(adjs, pickWord(nouns)),
+      "{ADV}": () => pickWord(advs, ""),
+      "{PREP}": () => pickWord(preps, ""),
+      "{CONJ}": () => pickWord(conjs, ""),
+      "{PRON}": () => pickWord(prons, pickWord(subjects)),
+      "{ART}": () => pickWord(arts, ""),
+      "{NUM}": () => pickWord(nums, ""),
+      "{INTJ}": () => pickWord(interjs, ""),
+      "{PART}": () => pickWord(particles, ""),
+      "{SVO}": () => buildSyntaxPattern("SVO"),
+      "{SOV}": () => buildSyntaxPattern("SOV"),
+      "{VSO}": () => buildSyntaxPattern("VSO"),
+      "{VOS}": () => buildSyntaxPattern("VOS"),
+      "{OSV}": () => buildSyntaxPattern("OSV"),
+      "{OVS}": () => buildSyntaxPattern("OVS")
+    };
+    const tokenRegex = /\{(?:SUBS|SUJ|OBJ|VERBO|ADJ|ADV|PREP|CONJ|PRON|ART|NUM|INTJ|PART|SVO|SOV|VSO|VOS|OSV|OVS)\}/g;
     const results = [];
     for (let i = 0; i < count; i++) {
       const tpl = templates[Math.floor(Math.random() * templates.length)];
-      const phrase = tpl.replace(/\{SUBS\}/g, () => pick(subst)).replace(/\{VERBO\}/g, () => pick(verb)).replace(/\{ADJ\}/g, () => pick(adj.length ? adj : subst)).replace(/\{ADV\}/g, () => pick(adv.length ? adv : [{
-        word: ""
-      }])).replace(/\{PREP\}/g, () => pick(prep.length ? prep : [{
-        word: "na"
-      }])).replace(/\{CONJ\}/g, () => pick(conj.length ? conj : [{
-        word: "e"
-      }])).replace(/\s+/g, " ").trim();
+      let phrase = tpl;
+      let safety = 0;
+      while (tokenRegex.test(phrase) && safety < 10) {
+        tokenRegex.lastIndex = 0;
+        phrase = phrase.replace(tokenRegex, token => tokenResolvers[token] ? tokenResolvers[token]() : token);
+        safety++;
+      }
+      phrase = phrase.replace(/\s+([,.;!?])/g, "$1").replace(/\s+/g, " ").trim();
       results.push(phrase);
     }
     setGenerated(results);
@@ -13372,7 +13656,7 @@ function TextGeneratorPage({
     },
     value: newTpl,
     onChange: e => setNewTpl(e.target.value),
-    placeholder: "{SUBS} {VERBO} {SUBS}.",
+    placeholder: "{SOV} · {SUJ} {VERBO} {OBJ} · {INTJ}, {SUJ} {VERBO}.",
     onKeyDown: e => {
       if (e.key === "Enter" && newTpl.trim()) {
         setTemplates(t => [...t, newTpl.trim()]);
@@ -15592,7 +15876,10 @@ function Verbarium() {
     style: {
       color: "#ff9040"
     }
-  }, "\uD83D\uDD25 ", study.streak || 0, " ", L.ui.streak), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDD25 ", study.streak || 0, " ", L.ui.streak), authUser && fbReady && /*#__PURE__*/React.createElement("div", {
+    className: "badge",
+    title: "Usuários online no dicionário atual"
+  }, "🟢 ", onlineUsers.length, " online"), /*#__PURE__*/React.createElement("div", {
     className: "badge"
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -16007,177 +16294,6 @@ function Verbarium() {
     },
     t: t
   }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: t.fD,
-      color: t.accent,
-      fontSize: 10,
-      letterSpacing: 1,
-      marginBottom: 10
-    }
-  }, "\uD83C\uDF0D MINHAS CONLANGS"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))",
-      gap: 12,
-      marginBottom: 24
-    }
-  }, dicts.map(d => {
-    const isAct = actDict === d.id;
-    return /*#__PURE__*/React.createElement("div", {
-      key: d.id,
-      style: {
-        background: isAct ? t.ag : t.card,
-        border: `2px solid ${isAct ? t.accent : t.cb}`,
-        borderRadius: 16,
-        padding: 16,
-        cursor: "pointer",
-        transition: "all 0.2s",
-        position: "relative"
-      },
-      onClick: () => {
-        setActDict(d.id);
-        setTab("dictionary");
-      },
-      onMouseEnter: e => {
-        if (!isAct) {
-          e.currentTarget.style.borderColor = t.accent;
-          e.currentTarget.style.transform = "translateY(-2px)";
-        }
-      },
-      onMouseLeave: e => {
-        if (!isAct) {
-          e.currentTarget.style.borderColor = t.cb;
-          e.currentTarget.style.transform = "";
-        }
-      }
-    }, isAct && /*#__PURE__*/React.createElement("span", {
-      style: {
-        position: "absolute",
-        top: 8,
-        right: 8,
-        fontSize: 9,
-        background: t.accent,
-        color: t.light ? "#fff" : "#000",
-        padding: "2px 7px",
-        borderRadius: 20,
-        fontFamily: t.fD
-      }
-    }, "ativa"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: t.fD,
-        fontSize: 16,
-        color: isAct ? t.accent : t.text,
-        marginBottom: 2
-      }
-    }, d.name), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 11,
-        color: t.muted,
-        marginBottom: 8,
-        lineHeight: 1.4
-      }
-    }, d.description || "Sem descrição"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8,
-        flexWrap: "wrap",
-        marginBottom: 10
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        color: t.muted
-      }
-    }, "\uD83D\uDCD6 ", (d.entries || []).length), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        color: t.muted
-      }
-    }, "\uD83D\uDCAC ", (d.phrases || []).length), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        color: t.muted
-      }
-    }, "\uD83D\uDCDA ", (d.lessons || []).length)), dicts.length > 1 && /*#__PURE__*/React.createElement("button", {
-      onClick: e => {
-        e.stopPropagation();
-        setConfirmDelete(d.id);
-      },
-      style: {
-        fontSize: 10,
-        color: "#ef4444",
-        background: "rgba(239,68,68,0.08)",
-        border: "1px solid rgba(239,68,68,0.2)",
-        padding: "3px 9px",
-        borderRadius: 6,
-        cursor: "pointer",
-        fontFamily: t.fB
-      }
-    }, "\uD83D\uDDD1\uFE0F Excluir"));
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "transparent",
-      border: `2px dashed ${t.cb}`,
-      borderRadius: 16,
-      padding: 16,
-      cursor: "pointer",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      minHeight: 90,
-      transition: "all 0.18s"
-    },
-    onClick: () => {
-      const nm = prompt("Nome da nova conlang:");
-      if (!nm) return;
-      const nd = {
-        id: nm.toLowerCase().replace(/\s+/g, "_") + "_" + Date.now(),
-        name: nm,
-        description: "",
-        author: "",
-        entries: [],
-        phrases: [],
-        lessons: [],
-        grammar: {
-          morphology: "",
-          syntax: "",
-          writingSystem: "",
-          custom: []
-        },
-        phonology: {
-          usedConsonants: [],
-          usedVowels: [],
-          toneSystem: "",
-          notes: ""
-        }
-      };
-      setDicts(ds => [...ds, nd]);
-      setActDict(nd.id);
-      setTab("dictionary");
-      notify(nd.name + " criada! 🌍");
-    },
-    onMouseEnter: e => {
-      e.currentTarget.style.borderColor = t.accent;
-      e.currentTarget.style.background = t.ag;
-    },
-    onMouseLeave: e => {
-      e.currentTarget.style.borderColor = t.cb;
-      e.currentTarget.style.background = "transparent";
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 24,
-      color: t.muted
-    }
-  }, "+"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      color: t.muted,
-      fontFamily: t.fD
-    }
-  }, "Nova Conlang"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: t.fD,
       color: t.accent,

@@ -5,7 +5,7 @@
 //  dispositivos dos usuários quando você publicar uma nova versão do app.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'verbarium-v1.0.0';
+const CACHE_VERSION = 'verbarium-v1.0.1';
 
 // Recursos que serão cacheados na instalação (essenciais para offline)
 const CORE_ASSETS = [
