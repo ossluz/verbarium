@@ -9,11 +9,12 @@ const CACHE_VERSION = 'verbarium-v1.0.0';
 
 // Recursos que serão cacheados na instalação (essenciais para offline)
 const CORE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/verbarium/',
+  '/verbarium/index.html',
+  '/verbarium/manifest.json',
+  '/verbarium/firebase-config.js',
+  '/verbarium/icons/icon-192.png',
+  '/verbarium/icons/icon-512.png',
 ];
 
 // CDN resources — cacheados na primeira visita, servidos offline depois

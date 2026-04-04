@@ -8,12 +8,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Verbarium PRO"/>
   <meta name="description" content="Verbarium PRO — Dicionário colaborativo para criadores de conlangs"/>
-  <link rel="manifest" href="manifest.json"/>
+  <link rel="manifest" href="/verbarium/manifest.json"/>
   <link rel="apple-touch-icon" href="icons/icon-192.png"/>
   <title>Verbarium PRO</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display+SC:wght@400;700&family=EB+Garamond:ital,wght@0,400;1,400&family=Lora:ital,wght@0,400;1,400&family=Josefin+Sans:wght@300;400;600&family=Spectral:ital,wght@0,400;1,400&display=swap" rel="stylesheet"/>
+  <script src="firebase-config.js" onerror="console.log('[Verbarium] firebase-config.js não encontrado')"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -42,6 +43,7 @@
   <script>
 (function(){
 "use strict";
+(function(){try{var c=window.VERBARIUM_FIREBASE_CONFIG;if(c&&c.apiKey&&!c.apiKey.startsWith("COLE")){localStorage.setItem("vb_fb_config",JSON.stringify(c));}}catch(e){}})();
 var fill=document.querySelector('#splash-fill');
 var pct=0;
 var iv=setInterval(function(){pct=pct<85?pct+(Math.random()*8+2):pct+0.3;if(pct>97)pct=97;fill.style.width=Math.min(pct,97)+'%';},120);
@@ -199,18 +201,18 @@ const THEMES = {
   brasil: {
     name: "Verde-Amarelo",
     icon: "🇧🇷",
-    bg: "linear-gradient(160deg,#f8fff8,#fffff0,#f0f8ff)",
-    card: "rgba(0,150,60,0.05)",
-    cb: "rgba(0,140,60,0.18)",
-    accent: "#007a30",
-    ag: "rgba(0,150,60,0.12)",
-    text: "#0a2a12",
-    muted: "#3a6a48",
-    surf: "rgba(0,150,60,0.06)",
-    tag: "rgba(255,200,0,0.25)",
-    tagT: "#5a4000",
-    hdr: "rgba(245,255,245,0.97)",
-    inp: "rgba(0,140,60,0.05)",
+    bg: "linear-gradient(160deg,#ffffff,#fffef5,#f5fff8)",
+    card: "rgba(0,130,50,0.06)",
+    cb: "rgba(0,130,50,0.22)",
+    accent: "#006b28",
+    ag: "rgba(0,160,60,0.15)",
+    text: "#0a1f10",
+    muted: "#2d6640",
+    surf: "rgba(255,200,0,0.08)",
+    tag: "rgba(255,200,0,0.35)",
+    tagT: "#5a3a00",
+    hdr: "rgba(255,255,255,0.98)",
+    inp: "rgba(0,130,50,0.06)",
     fB: "'Lora',serif",
     fD: "'Playfair Display SC',serif",
     light: true,
@@ -3898,7 +3900,23 @@ function LessonSection({
     }
   }, /*#__PURE__*/React.createElement(Ic, {
     n: "plus"
-  }), "Nova Li\xE7\xE3o")), lessons.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }), "Nova Li\xE7\xE3o")), /*#__PURE__*/React.createElement(AutoLessonPanel, {
+    dict: dict,
+    lessons: lessons,
+    study: study,
+    onAddLessons: newLessons => {
+      onUpdate({
+        ...dict,
+        lessons: [...lessons, ...newLessons]
+      });
+      onStudyUpdate(s => ({
+        ...s,
+        xp: (s.xp || 0) + newLessons.length * 20
+      }));
+    },
+    t: t,
+    notify: notify
+  }), lessons.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: 60,
@@ -11132,6 +11150,450 @@ function TimelinePage({
   }, e.translation))))))));
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  AUTO-LESSON GENERATOR
+//  Analisa o vocabulário e cria lições automaticamente por nível/tema
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Níveis de dificuldade baseados no tamanho do dicionário
+const LESSON_LEVELS = [{
+  min: 0,
+  max: 20,
+  level: 1,
+  name: "Iniciante"
+}, {
+  min: 21,
+  max: 50,
+  level: 2,
+  name: "Básico"
+}, {
+  min: 51,
+  max: 100,
+  level: 3,
+  name: "Intermediário"
+}, {
+  min: 101,
+  max: 200,
+  level: 4,
+  name: "Avançado"
+}, {
+  min: 201,
+  max: 9999,
+  level: 5,
+  name: "Fluente"
+}];
+function detectLevel(entries) {
+  const n = entries.length;
+  return LESSON_LEVELS.find(l => n >= l.min && n <= l.max) || LESSON_LEVELS[0];
+}
+
+// Gera conteúdo textual para a lição baseado no tipo
+function buildLessonContent(type, words, dict) {
+  const wlist = words.map(function (w) {
+    return "• " + w.word + " = " + w.translation + (w.pronunciation ? " (" + w.pronunciation + ")" : "");
+  }).join("\n");
+  const grammar = dict && dict.grammar ? dict.grammar : {};
+  const dictName = dict && dict.name ? dict.name : "sua conlang";
+  const morpho = grammar.morphology ? "\n📌 Nota morfológica:\n" + grammar.morphology.slice(0, 200) + "..." : "";
+  const phVowels = dict && dict.phonology && dict.phonology.usedVowels ? dict.phonology.usedVowels.join(", ") || "Não definidas" : "Não definidas";
+  const phCons = dict && dict.phonology && dict.phonology.usedConsonants ? dict.phonology.usedConsonants.join(", ") || "Não definidas" : "Não definidas";
+  const phNotes = dict && dict.phonology && dict.phonology.notes ? "\n" + dict.phonology.notes : "";
+  const grSyntax = grammar.syntax ? "\nSintaxe: " + grammar.syntax.slice(0, 300) : "";
+  const contents = {
+    greeting: "Bem-vindo à primeira lição de " + dictName + "!\n\nNesta lição você aprenderá as saudações e palavras básicas do dia a dia.\n\n" + wlist + "\n\nDica: Pratique estas palavras todos os dias!",
+    nouns: "Os substantivos de " + dictName + " são a base do vocabulário.\n\nPalavras desta lição:\n" + wlist + morpho,
+    verbs: "Os verbos dão movimento à língua! Nesta lição você aprenderá as ações essenciais.\n\nVerbos desta lição:\n" + wlist + "\n\nDica: Tente usar cada verbo em uma frase simples.",
+    adjectives: "Os adjetivos enriquecem a descrição na língua. Aprenda a descrever o mundo ao seu redor.\n\nAdjetivos desta lição:\n" + wlist,
+    thematic: "Vocabulário temático agrupado por contexto de uso.\n\nPalavras desta lição:\n" + wlist,
+    advanced: "Vocabulário avançado para falantes intermediários. Estas palavras ampliam sua expressividade.\n\nPalavras:\n" + wlist,
+    review: "Revisão geral do vocabulário aprendido até agora.\n\nPalavras para revisar:\n" + wlist + "\n\n💡 Use o modo SRS (Revisão Espaçada) para fixar melhor!",
+    grammar_intro: "Introdução à gramática de " + dictName + ".\n\n" + (grammar.morphology || "Morfologia não definida ainda.") + grSyntax,
+    phonology_intro: "Sistema fonológico de " + dictName + ".\n\nVogais: " + phVowels + "\nConsoantes: " + phCons + phNotes
+  };
+  return contents[type] || contents.thematic;
+}
+function groupByTheme(entries) {
+  const groups = {};
+  entries.forEach(e => {
+    const tags = e.tags || [];
+    if (tags.length === 0) {
+      if (!groups["geral"]) groups["geral"] = [];
+      groups["geral"].push(e);
+    } else {
+      tags.forEach(tag => {
+        if (!groups[tag]) groups[tag] = [];
+        groups[tag].push(e);
+      });
+    }
+  });
+  return groups;
+}
+
+// MAIN: Gera lições automaticamente
+function generateAutoLessons(dict, existingLessons = []) {
+  const entries = dict?.entries || [];
+  if (entries.length < 3) return [];
+  const today = new Date().toISOString().split("T")[0];
+  const existingIds = new Set(existingLessons.map(l => l.autoId).filter(Boolean));
+  const generated = [];
+  let counter = 0;
+  const makeId = key => "auto_" + dict.id + "_" + key;
+  const nouns = entries.filter(e => e.class === "substantivo");
+  const verbs = entries.filter(e => e.class === "verbo");
+  const adjs = entries.filter(e => e.class === "adjetivo");
+  const level = detectLevel(entries);
+  const themes = groupByTheme(entries);
+
+  // ── Lição 1: Saudações (se houver tags "saudações" ou "básico")
+  const greetings = entries.filter(e => (e.tags || []).some(t => /saudaç|greeting|basic|básico/i.test(t)));
+  if (greetings.length >= 2 && !existingIds.has(makeId("greetings"))) {
+    generated.push({
+      id: Date.now() + counter++,
+      autoId: makeId("greetings"),
+      title: `Lição ${generated.length + existingLessons.length + 1} — Saudações e Expressões Básicas`,
+      description: "Primeiras palavras e cumprimentos essenciais da língua.",
+      entryIds: greetings.slice(0, 8).map(e => e.id),
+      content: buildLessonContent("greeting", greetings.slice(0, 8), dict),
+      level: 1,
+      autoGenerated: true,
+      created: today
+    });
+  }
+
+  // ── Lição 2: Substantivos essenciais (primeiros 8-10)
+  if (nouns.length >= 4 && !existingIds.has(makeId("nouns_basic"))) {
+    const pool = nouns.slice(0, 10);
+    generated.push({
+      id: Date.now() + counter++,
+      autoId: makeId("nouns_basic"),
+      title: `Lição ${generated.length + existingLessons.length + 1} — Substantivos Essenciais`,
+      description: "Os primeiros substantivos da língua — objetos, lugares e pessoas.",
+      entryIds: pool.map(e => e.id),
+      content: buildLessonContent("nouns", pool, dict),
+      level: 1,
+      autoGenerated: true,
+      created: today
+    });
+  }
+
+  // ── Lição 3: Verbos básicos
+  if (verbs.length >= 3 && !existingIds.has(makeId("verbs_basic"))) {
+    const pool = verbs.slice(0, 8);
+    generated.push({
+      id: Date.now() + counter++,
+      autoId: makeId("verbs_basic"),
+      title: `Lição ${generated.length + existingLessons.length + 1} — Verbos: Ações do Cotidiano`,
+      description: "Os principais verbos da língua para expressar ações.",
+      entryIds: pool.map(e => e.id),
+      content: buildLessonContent("verbs", pool, dict),
+      level: 1,
+      autoGenerated: true,
+      created: today
+    });
+  }
+
+  // ── Lição 4: Adjetivos
+  if (adjs.length >= 3 && !existingIds.has(makeId("adjs_basic"))) {
+    const pool = adjs.slice(0, 8);
+    generated.push({
+      id: Date.now() + counter++,
+      autoId: makeId("adjs_basic"),
+      title: `Lição ${generated.length + existingLessons.length + 1} — Adjetivos: Descrevendo o Mundo`,
+      description: "Aprenda a descrever pessoas, lugares e coisas.",
+      entryIds: pool.map(e => e.id),
+      content: buildLessonContent("adjectives", pool, dict),
+      level: 2,
+      autoGenerated: true,
+      created: today
+    });
+  }
+
+  // ── Lições temáticas por tag
+  const TOP_THEMES = Object.entries(themes).filter(([tag, ws]) => ws.length >= 3 && tag !== "geral" && tag !== "básico" && tag !== "saudações").sort((a, b) => b[1].length - a[1].length).slice(0, 4);
+  TOP_THEMES.forEach(([tag, words]) => {
+    const autoId = makeId("theme_" + tag.replace(/\s+/g, "_"));
+    if (!existingIds.has(autoId)) {
+      generated.push({
+        id: Date.now() + counter++,
+        autoId,
+        title: `Lição ${generated.length + existingLessons.length + 1} — Vocabulário: ${tag.charAt(0).toUpperCase() + tag.slice(1)}`,
+        description: `${words.length} palavras do campo semântico "${tag}".`,
+        entryIds: words.slice(0, 10).map(e => e.id),
+        content: buildLessonContent("thematic", words.slice(0, 10), dict),
+        level: 2,
+        autoGenerated: true,
+        created: today
+      });
+    }
+  });
+
+  // ── Lição Fonologia (se tiver fonemas configurados)
+  const hasPhonoData = (dict?.phonology?.usedVowels || []).length + (dict?.phonology?.usedConsonants || []).length;
+  if (hasPhonoData >= 5 && !existingIds.has(makeId("phonology"))) {
+    generated.push({
+      id: Date.now() + counter++,
+      autoId: makeId("phonology"),
+      title: `Lição ${generated.length + existingLessons.length + 1} — Sistema Fonológico`,
+      description: "Aprenda os sons e a pronúncia da língua.",
+      entryIds: entries.filter(e => e.pronunciation).slice(0, 8).map(e => e.id),
+      content: buildLessonContent("phonology_intro", [], dict),
+      level: 2,
+      autoGenerated: true,
+      created: today
+    });
+  }
+
+  // ── Lição Gramática (se tiver morfologia definida)
+  if ((dict?.grammar?.morphology || "").length > 50 && !existingIds.has(makeId("grammar"))) {
+    generated.push({
+      id: Date.now() + counter++,
+      autoId: makeId("grammar"),
+      title: `Lição ${generated.length + existingLessons.length + 1} — Gramática Fundamental`,
+      description: "As regras gramaticais básicas da língua.",
+      entryIds: entries.slice(0, 5).map(e => e.id),
+      content: buildLessonContent("grammar_intro", [], dict),
+      level: 3,
+      autoGenerated: true,
+      created: today
+    });
+  }
+
+  // ── Lições avançadas (substantivos, verbos, adjetivos extras)
+  if (entries.length > 20 && !existingIds.has(makeId("nouns_adv"))) {
+    const pool = nouns.slice(10, 20).filter(Boolean);
+    if (pool.length >= 3) {
+      generated.push({
+        id: Date.now() + counter++,
+        autoId: makeId("nouns_adv"),
+        title: `Lição ${generated.length + existingLessons.length + 1} — Substantivos Avançados`,
+        description: "Amplie seu léxico com substantivos mais específicos.",
+        entryIds: pool.map(e => e.id),
+        content: buildLessonContent("advanced", pool, dict),
+        level: 3,
+        autoGenerated: true,
+        created: today
+      });
+    }
+  }
+
+  // ── Lição de revisão (se tiver >15 palavras e lições existentes)
+  if (entries.length >= 15 && existingLessons.length + generated.length >= 2 && !existingIds.has(makeId("review_1"))) {
+    const pool = [...entries].sort(() => Math.random() - 0.5).slice(0, 12);
+    generated.push({
+      id: Date.now() + counter++,
+      autoId: makeId("review_1"),
+      title: `Revisão Geral — ${level.name}`,
+      description: "Revise todo o vocabulário aprendido até agora.",
+      entryIds: pool.map(e => e.id),
+      content: buildLessonContent("review", pool, dict),
+      level: level.level,
+      autoGenerated: true,
+      created: today,
+      isReview: true
+    });
+  }
+  return generated;
+}
+
+// ── AUTO-LESSON BUTTON in LessonSection ────────────────────────────────────────
+function AutoLessonPanel({
+  dict,
+  lessons,
+  onAddLessons,
+  study,
+  t,
+  notify
+}) {
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const entries = dict?.entries || [];
+  const level = detectLevel(entries);
+  const generate = () => {
+    setLoading(true);
+    setTimeout(() => {
+      const newLessons = generateAutoLessons(dict, lessons);
+      if (!newLessons.length) {
+        notify("Nenhuma lição nova para gerar. Adicione mais palavras ou as lições já existem.", "info");
+      } else {
+        setPreview(newLessons);
+      }
+      setLoading(false);
+    }, 300);
+  };
+  const confirm = () => {
+    if (!preview?.length) return;
+    onAddLessons(preview);
+    notify(`✅ ${preview.length} lições geradas automaticamente! +${preview.length * 20} XP`);
+    setPreview(null);
+  };
+  if (!entries.length) return null;
+  const levelColors = {
+    1: "#22c55e",
+    2: "#60a5fa",
+    3: "#f59e0b",
+    4: "#f97316",
+    5: "#a855f7"
+  };
+  const lc = levelColors[level.level] || t.accent;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `${lc}10`,
+      border: `1px solid ${lc}30`,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20
+    }
+  }, "\uD83E\uDD16"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 14,
+      color: lc
+    }
+  }, "Gerador Autom\xE1tico de Li\xE7\xF5es"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      background: `${lc}20`,
+      color: lc,
+      padding: "2px 8px",
+      borderRadius: 20,
+      border: `1px solid ${lc}40`
+    }
+  }, "N\xEDvel ", level.level, " \u2014 ", level.name)), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      lineHeight: 1.6,
+      marginBottom: 0
+    }
+  }, "O app analisou seu dicion\xE1rio (", entries.length, " palavras) e pode gerar li\xE7\xF5es organizadas por tema, classe gramatical e n\xEDvel. As li\xE7\xF5es respeitam os recursos que voc\xEA j\xE1 tem.")), /*#__PURE__*/React.createElement("button", {
+    onClick: generate,
+    disabled: loading,
+    style: {
+      padding: "9px 18px",
+      background: lc,
+      color: "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: loading ? "wait" : "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600,
+      flexShrink: 0,
+      whiteSpace: "nowrap"
+    }
+  }, loading ? "⏳ Analisando..." : "✨ Gerar Lições")), preview && preview.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: lc,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, preview.length, " LI\xC7\xD5ES PRONTAS PARA ADICIONAR \u2014 PREVIEW"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+      marginBottom: 14
+    }
+  }, preview.map((l, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      padding: "10px 14px"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      flexShrink: 0
+    }
+  }, "\uD83D\uDCDA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.text,
+      fontFamily: t.fD
+    }
+  }, l.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 2
+    }
+  }, l.description, " \xB7 ", l.entryIds.length, " palavras")), l.autoGenerated && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      color: lc,
+      background: `${lc}15`,
+      padding: "2px 6px",
+      borderRadius: 9,
+      flexShrink: 0
+    }
+  }, "AUTO")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: confirm,
+    style: {
+      flex: 1,
+      padding: "10px",
+      background: lc,
+      color: "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, "\u2705 Adicionar ", preview.length, " Li\xE7\xF5es ao Dicion\xE1rio"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPreview(null),
+    style: {
+      padding: "10px 16px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "Cancelar"))));
+}
+
 // SETTINGS SECTION --───────────────────────────────────────────────────────
 function LoginNotice({
   fbReady,
@@ -11139,7 +11601,7 @@ function LoginNotice({
   onLogin,
   t
 }) {
-  if (!fbReady || authUser) return null;
+  if (authUser) return null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(180,140,255,0.06)",
@@ -11576,6 +12038,2509 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  VERBARIUM — NOVOS RECURSOS v2.0
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── ACTIVITY LOGGER ───────────────────────────────────────────────────────────
+const ACT_KEY = "vb_activity_v1";
+function loadActivity(dictId) {
+  try {
+    return JSON.parse(localStorage.getItem(ACT_KEY + "_" + dictId)) || [];
+  } catch {
+    return [];
+  }
+}
+function saveActivity(dictId, acts) {
+  try {
+    localStorage.setItem(ACT_KEY + "_" + dictId, JSON.stringify(acts.slice(-200)));
+  } catch {}
+}
+function logActivity(dictId, user, type, detail, fbReady) {
+  const act = {
+    id: genId(8),
+    user: user?.displayName || user?.name || "Anônimo",
+    userId: user?.uid || user?.id || "",
+    avatar: user?.photoURL || user?.avatar || "🧙",
+    type,
+    detail,
+    ts: tsNow()
+  };
+  const current = loadActivity(dictId);
+  const updated = [...current, act];
+  saveActivity(dictId, updated);
+  if (fbReady && window.firebase?.firestore) {
+    firebase.firestore().collection("activity").doc(dictId).collection("log").add(act).catch(() => {});
+  }
+  return updated;
+}
+
+// ── ONLINE PRESENCE ───────────────────────────────────────────────────────────
+function useOnlinePresence(authUser, dictId, fbReady) {
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  useEffect(() => {
+    if (!fbReady || !window.firebase?.database || !authUser || !dictId) return;
+    try {
+      const db = firebase.database();
+      const ref = db.ref("presence/" + dictId + "/" + authUser.uid);
+      const info = {
+        name: authUser.displayName,
+        avatar: authUser.photoURL || "🧙",
+        ts: Date.now()
+      };
+      ref.set(info);
+      ref.onDisconnect().remove();
+      const allRef = db.ref("presence/" + dictId);
+      const unsub = allRef.on("value", snap => {
+        const data = snap.val() || {};
+        setOnlineUsers(Object.values(data));
+      });
+      return () => {
+        ref.remove();
+        allRef.off("value", unsub);
+      };
+    } catch (e) {
+      console.warn("[Presence]", e);
+    }
+  }, [authUser, dictId, fbReady]);
+  return onlineUsers;
+}
+
+// ── ACTIVITY HISTORY PAGE ─────────────────────────────────────────────────────
+function HistoryPage({
+  dict,
+  authUser,
+  fbReady,
+  onlineUsers,
+  t
+}) {
+  const [acts, setActs] = useState(() => loadActivity(dict?.id || ""));
+  const [filter, setFilter] = useState("all");
+  const [fbActs, setFbActs] = useState([]);
+  useEffect(() => {
+    setActs(loadActivity(dict?.id || ""));
+    if (fbReady && window.firebase?.firestore && dict?.id) {
+      firebase.firestore().collection("activity").doc(dict.id).collection("log").orderBy("ts", "desc").limit(100).get().then(snap => {
+        if (!snap.empty) {
+          const remote = snap.docs.map(d => ({
+            id: d.id,
+            ...d.data()
+          }));
+          setFbActs(remote);
+        }
+      }).catch(() => {});
+    }
+  }, [dict?.id, fbReady]);
+  const allActs = [...fbActs, ...acts].sort((a, b) => new Date(b.ts) - new Date(a.ts)).filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i);
+  const filtered = filter === "all" ? allActs : allActs.filter(a => a.type === filter);
+  const typeIcons = {
+    add: "✅",
+    edit: "✏️",
+    delete: "🗑️",
+    login: "🔑",
+    import: "📥",
+    export: "📤"
+  };
+  const typeColors = {
+    add: "#22c55e",
+    edit: "#f59e0b",
+    delete: "#ef4444",
+    login: "#60a5fa",
+    import: "#a78bfa",
+    export: "#34d399"
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 20,
+      flexWrap: "wrap",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent
+    }
+  }, "Hist\xF3rico de Atividades"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 12,
+      marginTop: 2
+    }
+  }, dict?.name, " \xB7 ", allActs.length, " eventos registrados")), onlineUsers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: "rgba(34,197,94,0.1)",
+      border: "1px solid rgba(34,197,94,0.25)",
+      borderRadius: 20,
+      padding: "6px 14px"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      background: "#22c55e",
+      display: "inline-block",
+      boxShadow: "0 0 6px #22c55e"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: "#22c55e"
+    }
+  }, onlineUsers.length, " online agora"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: -4
+    }
+  }, onlineUsers.slice(0, 5).map((u, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      width: 24,
+      height: 24,
+      borderRadius: "50%",
+      overflow: "hidden",
+      border: `2px solid ${t.card}`,
+      marginLeft: i > 0 ? -8 : 0
+    }
+  }, u.avatar && u.avatar.startsWith("http") ? /*#__PURE__*/React.createElement("img", {
+    src: u.avatar,
+    style: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover"
+    },
+    alt: ""
+  }) : /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      background: t.surf
+    }
+  }, u.avatar || "🧙")))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 16,
+      flexWrap: "wrap"
+    }
+  }, [["all", "Tudo"], ["add", "Adicionados"], ["edit", "Editados"], ["delete", "Removidos"], ["import", "Importados"]].map(([v, lb]) => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => setFilter(v),
+    style: {
+      padding: "5px 12px",
+      borderRadius: 20,
+      border: `1px solid ${filter === v ? t.accent : t.cb}`,
+      background: filter === v ? t.ag : "transparent",
+      color: filter === v ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, v !== "all" && typeIcons[v] + " ", lb))), filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 60,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 48,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDCCB"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "Nenhuma atividade registrada ainda.", /*#__PURE__*/React.createElement("br", null), "As a\xE7\xF5es passam a aparecer aqui conforme voc\xEA usa o app.")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      paddingLeft: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 7,
+      top: 0,
+      bottom: 0,
+      width: 2,
+      background: t.cb
+    }
+  }), filtered.map((act, i) => {
+    const color = typeColors[act.type] || t.accent;
+    const icon = typeIcons[act.type] || "📝";
+    const isToday = new Date(act.ts).toDateString() === new Date().toDateString();
+    const timeStr = isToday ? fmtTime(act.ts) : fmtDate(act.ts);
+    return /*#__PURE__*/React.createElement("div", {
+      key: act.id || i,
+      style: {
+        position: "relative",
+        marginBottom: 12,
+        paddingLeft: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        left: -19,
+        top: 3,
+        width: 12,
+        height: 12,
+        borderRadius: "50%",
+        background: color,
+        border: `2px solid ${t.light ? "#fff" : "#0a0a0f"}`
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: t.card,
+        border: `1px solid ${t.cb}`,
+        borderRadius: 12,
+        padding: "10px 14px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 4,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 24,
+        height: 24,
+        borderRadius: "50%",
+        overflow: "hidden",
+        flexShrink: 0,
+        background: t.surf,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, act.avatar && act.avatar.startsWith("http") ? /*#__PURE__*/React.createElement("img", {
+      src: act.avatar,
+      style: {
+        width: "100%",
+        height: "100%",
+        objectFit: "cover"
+      },
+      alt: ""
+    }) : /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13
+      }
+    }, act.avatar || "🧙")), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 13,
+        color: t.accent
+      }
+    }, act.user), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        background: color + "22",
+        color,
+        padding: "2px 8px",
+        borderRadius: 20,
+        border: `1px solid ${color}44`
+      }
+    }, icon, " ", act.type), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: t.muted,
+        marginLeft: "auto"
+      }
+    }, timeStr)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: t.text,
+        lineHeight: 1.5
+      }
+    }, act.detail)));
+  })));
+}
+
+// ── WORD FAMILIES / LEXICAL GROUPS ────────────────────────────────────────────
+function WordFamiliesPage({
+  dict,
+  t,
+  onSelectWord
+}) {
+  const entries = dict?.entries || [];
+  const [view, setView] = useState("roots"); // roots | tags | class
+
+  // Group by root
+  const byRoot = {};
+  entries.forEach(e => {
+    (e.roots || []).forEach(r => {
+      const key = r.trim();
+      if (!key) return;
+      if (!byRoot[key]) byRoot[key] = [];
+      byRoot[key].push(e);
+    });
+    if (!(e.roots || []).length) {
+      const k = "(sem raiz)";
+      if (!byRoot[k]) byRoot[k] = [];
+      byRoot[k].push(e);
+    }
+  });
+
+  // Group by tag
+  const byTag = {};
+  entries.forEach(e => (e.tags || []).forEach(tag => {
+    if (!byTag[tag]) byTag[tag] = [];
+    byTag[tag].push(e);
+  }));
+
+  // Group by class
+  const byClass = {};
+  entries.forEach(e => {
+    const c = e.class || "outro";
+    if (!byClass[c]) byClass[c] = [];
+    byClass[c].push(e);
+  });
+  const groups = view === "roots" ? byRoot : view === "tags" ? byTag : byClass;
+  const sorted = Object.entries(groups).filter(([, v]) => v.length > 0).sort((a, b) => b[1].length - a[1].length);
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+      flexWrap: "wrap",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent
+    }
+  }, "Fam\xEDlias Lexicais"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 12
+    }
+  }, dict?.name, " \xB7 ", entries.length, " palavras em ", sorted.length, " grupos")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, [["roots", "Raízes"], ["tags", "Tags"], ["class", "Classes"]].map(([v, lb]) => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => setView(v),
+    style: {
+      padding: "6px 14px",
+      borderRadius: 9,
+      border: `1px solid ${view === v ? t.accent : t.cb}`,
+      background: view === v ? t.ag : "transparent",
+      color: view === v ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, lb)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))",
+      gap: 12
+    }
+  }, sorted.map(([key, words]) => /*#__PURE__*/React.createElement("div", {
+    key: key,
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 14,
+      color: t.accent
+    }
+  }, key), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      background: t.surf,
+      padding: "2px 8px",
+      borderRadius: 20,
+      color: t.muted,
+      border: `1px solid ${t.cb}`
+    }
+  }, words.length, " palavras")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 5
+    }
+  }, words.slice(0, 12).map(w => /*#__PURE__*/React.createElement("span", {
+    key: w.id,
+    onClick: () => onSelectWord(w),
+    style: {
+      fontSize: 12,
+      fontFamily: t.fD,
+      color: t.accent,
+      background: t.ag,
+      padding: "3px 9px",
+      borderRadius: 8,
+      cursor: "pointer",
+      border: `1px solid ${t.cb}44`
+    }
+  }, w.word)), words.length > 12 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      alignSelf: "center"
+    }
+  }, "+", words.length - 12))))));
+}
+
+// ── SHAREABLE QUIZ ────────────────────────────────────────────────────────────
+function QuizPage({
+  dict,
+  t,
+  notify
+}) {
+  const [mode, setMode] = useState("setup"); // setup | playing | result
+  const [cfg, setCfg] = useState({
+    count: 10,
+    type: "findT",
+    tags: []
+  });
+  const [questions, setQuestions] = useState([]);
+  const [idx, setIdx] = useState(0);
+  const [score, setScore] = useState(0);
+  const [sel, setSel] = useState(null);
+  const [shareLink, setShareLink] = useState("");
+  const entries = dict?.entries || [];
+  const allTags = [...new Set(entries.flatMap(e => e.tags || []))];
+  const startQuiz = () => {
+    let pool = entries;
+    if (cfg.tags.length > 0) pool = pool.filter(e => (e.tags || []).some(t => cfg.tags.includes(t)));
+    if (pool.length < 4) {
+      notify("Mínimo 4 palavras para o quiz. Reduza os filtros.", "err");
+      return;
+    }
+    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(cfg.count, pool.length));
+    const qs = shuffled.map(card => {
+      const wrong = [...pool].filter(e => e.id !== card.id).sort(() => Math.random() - 0.5).slice(0, 3);
+      const options = [...wrong, card].sort(() => Math.random() - 0.5);
+      return {
+        card,
+        options
+      };
+    });
+    setQuestions(qs);
+    setIdx(0);
+    setScore(0);
+    setSel(null);
+    setMode("playing");
+  };
+  const generateLink = () => {
+    const data = {
+      dictName: dict?.name || "Conlang",
+      words: entries.slice(0, 50).map(e => ({
+        w: e.word,
+        t: e.translation
+      })),
+      cfg
+    };
+    const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
+    const link = `${window.location.origin}${window.location.pathname}?quiz=${encoded}`;
+    setShareLink(link);
+    navigator.clipboard?.writeText(link).then(() => notify("Link do quiz copiado! ✅")).catch(() => {});
+  };
+  if (mode === "result") return /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 60
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 60,
+      marginBottom: 12
+    }
+  }, "\uD83C\uDFC6"), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 24,
+      color: t.accent,
+      marginBottom: 8
+    }
+  }, "Quiz Conclu\xEDdo!"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 20,
+      color: t.text,
+      marginBottom: 20
+    }
+  }, score, "/", questions.length, " corretas"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      justifyContent: "center",
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMode("setup"),
+    style: {
+      padding: "10px 20px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "Novo Quiz"), /*#__PURE__*/React.createElement("button", {
+    onClick: generateLink,
+    style: {
+      padding: "10px 20px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "\uD83D\uDD17 Compartilhar")));
+  if (mode === "playing" && questions.length > 0) {
+    const q = questions[idx];
+    const answered = sel !== null;
+    const isLast = idx === questions.length - 1;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxWidth: 560,
+        margin: "0 auto"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 20
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: t.fD,
+        color: t.accent
+      }
+    }, dict?.name, " \u2014 Quiz"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: t.muted,
+        fontSize: 13
+      }
+    }, idx + 1, "/", questions.length, " \xB7 \u2705 ", score)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: t.surf,
+        borderRadius: 99,
+        height: 5,
+        marginBottom: 20,
+        overflow: "hidden"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: `${(idx + 1) / questions.length * 100}%`,
+        height: "100%",
+        background: t.accent,
+        borderRadius: 99,
+        transition: "width 0.3s"
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: t.card,
+        border: `1px solid ${t.cb}`,
+        borderRadius: 18,
+        padding: "32px 24px",
+        textAlign: "center",
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: t.muted,
+        marginBottom: 8
+      }
+    }, "Qual a tradu\xE7\xE3o?"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 32,
+        color: t.accent,
+        marginBottom: 6
+      }
+    }, q.card.word), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: t.muted,
+        fontStyle: "italic"
+      }
+    }, q.card.pronunciation)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 10
+      }
+    }, q.options.map(opt => {
+      const isCorrect = opt.id === q.card.id;
+      const isSel = sel === opt.id;
+      const bg = answered ? isCorrect ? "rgba(34,197,94,0.15)" : isSel ? "rgba(239,68,68,0.15)" : t.card : t.card;
+      const border = answered ? isCorrect ? "#22c55e" : isSel ? "#ef4444" : t.cb : t.cb;
+      return /*#__PURE__*/React.createElement("div", {
+        key: opt.id,
+        onClick: () => {
+          if (answered) return;
+          setSel(opt.id);
+          if (isCorrect) setScore(s => s + 1);
+        },
+        style: {
+          background: bg,
+          border: `2px solid ${border}`,
+          borderRadius: 12,
+          padding: "14px 10px",
+          cursor: answered ? "default" : "pointer",
+          textAlign: "center",
+          fontSize: 14,
+          fontFamily: t.fB,
+          color: answered ? isCorrect ? "#22c55e" : isSel ? "#ef4444" : t.muted : t.text,
+          transition: "all 0.2s"
+        }
+      }, opt.translation);
+    })), answered && /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        if (isLast) {
+          setMode("result");
+        } else {
+          setIdx(i => i + 1);
+          setSel(null);
+        }
+      },
+      style: {
+        marginTop: 16,
+        width: "100%",
+        padding: "12px",
+        background: t.accent,
+        color: t.light ? "#fff" : "#000",
+        border: "none",
+        borderRadius: 12,
+        cursor: "pointer",
+        fontFamily: t.fB,
+        fontSize: 14,
+        fontWeight: 600
+      }
+    }, isLast ? "Ver Resultado →" : "Próxima →"));
+  }
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "8px 12px",
+    borderRadius: 9,
+    fontFamily: t.fB,
+    fontSize: 14,
+    outline: "none",
+    width: "100%"
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 520
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent,
+      marginBottom: 4
+    }
+  }, "Quiz de Vocabul\xE1rio"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 13,
+      marginBottom: 20
+    }
+  }, "Teste seu conhecimento ou compartilhe com outras pessoas."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 20,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 5
+    }
+  }, "Quantidade de perguntas"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    style: inp,
+    min: 4,
+    max: 50,
+    value: cfg.count,
+    onChange: e => setCfg(p => ({
+      ...p,
+      count: parseInt(e.target.value) || 10
+    }))
+  })), allTags.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 6
+    }
+  }, "Filtrar por tags (opcional)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6
+    }
+  }, allTags.map(tag => /*#__PURE__*/React.createElement("button", {
+    key: tag,
+    onClick: () => setCfg(p => ({
+      ...p,
+      tags: p.tags.includes(tag) ? p.tags.filter(x => x !== tag) : [...p.tags, tag]
+    })),
+    style: {
+      padding: "4px 10px",
+      borderRadius: 20,
+      border: `1px solid ${cfg.tags.includes(tag) ? t.accent : t.cb}`,
+      background: cfg.tags.includes(tag) ? t.ag : "transparent",
+      color: cfg.tags.includes(tag) ? t.accent : t.muted,
+      cursor: "pointer",
+      fontSize: 12,
+      fontFamily: t.fB
+    }
+  }, tag))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: startQuiz,
+    style: {
+      flex: 1,
+      padding: "11px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "\uD83C\uDFAF Iniciar Quiz"), /*#__PURE__*/React.createElement("button", {
+    onClick: generateLink,
+    style: {
+      flex: 1,
+      padding: "11px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "\uD83D\uDD17 Gerar Link Compartilh\xE1vel")), shareLink && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12,
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      padding: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginBottom: 4
+    }
+  }, "Link do quiz (copiado para a \xE1rea de transfer\xEAncia):"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "monospace",
+      fontSize: 11,
+      color: t.accent,
+      wordBreak: "break-all"
+    }
+  }, shareLink.slice(0, 80), "...")));
+}
+
+// ── TEXT GENERATOR ────────────────────────────────────────────────────────────
+function TextGeneratorPage({
+  dict,
+  t,
+  notify
+}) {
+  const [templates, setTemplates] = useState(["{SUBS} {VERBO}.", "{SUBS} {VERBO} {SUBS}.", "{ADJ} {SUBS} {VERBO} {ADV}.", "{SUBS} {VERBO} {PREP} {SUBS}."]);
+  const [newTpl, setNewTpl] = useState("");
+  const [generated, setGenerated] = useState([]);
+  const [count, setCount] = useState(5);
+  const entries = dict?.entries || [];
+  const byClass = cls => entries.filter(e => e.class === cls);
+  const pick = arr => arr.length ? arr[Math.floor(Math.random() * arr.length)].word : "...";
+  const generate = () => {
+    const subst = byClass("substantivo");
+    const verb = byClass("verbo");
+    const adj = byClass("adjetivo");
+    const adv = byClass("advérbio");
+    const prep = byClass("preposição");
+    const conj = byClass("conjunção");
+    if (!subst.length || !verb.length) {
+      notify("Adicione substantivos e verbos ao dicionário para gerar frases.", "info");
+      return;
+    }
+    const results = [];
+    for (let i = 0; i < count; i++) {
+      const tpl = templates[Math.floor(Math.random() * templates.length)];
+      const phrase = tpl.replace(/\{SUBS\}/g, () => pick(subst)).replace(/\{VERBO\}/g, () => pick(verb)).replace(/\{ADJ\}/g, () => pick(adj.length ? adj : subst)).replace(/\{ADV\}/g, () => pick(adv.length ? adv : [{
+        word: ""
+      }])).replace(/\{PREP\}/g, () => pick(prep.length ? prep : [{
+        word: "na"
+      }])).replace(/\{CONJ\}/g, () => pick(conj.length ? conj : [{
+        word: "e"
+      }])).replace(/\s+/g, " ").trim();
+      results.push(phrase);
+    }
+    setGenerated(results);
+  };
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "8px 12px",
+    borderRadius: 9,
+    fontFamily: t.fB,
+    fontSize: 14,
+    outline: "none",
+    width: "100%"
+  };
+  const lbl = {
+    fontSize: 9,
+    color: t.muted,
+    fontFamily: t.fD,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    display: "block",
+    marginBottom: 5
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 680
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent,
+      marginBottom: 4
+    }
+  }, "Gerador de Texto"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 13,
+      marginBottom: 20
+    }
+  }, "Cria frases aleat\xF3rias usando o vocabul\xE1rio do dicion\xE1rio seguindo os templates gramaticais que voc\xEA definir."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDCD0 TEMPLATES GRAMATICAIS"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginBottom: 10,
+      lineHeight: 1.6
+    }
+  }, "Use os marcadores: ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "{SUBS}"), " = substantivo \xB7 ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "{VERBO}"), " = verbo \xB7 ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "{ADJ}"), " = adjetivo \xB7 ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "{ADV}"), " = adv\xE9rbio \xB7 ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "{PREP}"), " = preposi\xE7\xE3o"), templates.map((tpl, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      flex: 1,
+      fontFamily: "monospace",
+      fontSize: 12
+    },
+    value: tpl,
+    onChange: e => {
+      const t2 = [...templates];
+      t2[i] = e.target.value;
+      setTemplates(t2);
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setTemplates(t => t.filter((_, j) => j !== i)),
+    style: {
+      padding: "6px 10px",
+      background: "rgba(239,68,68,0.1)",
+      color: "#ef4444",
+      border: "1px solid rgba(239,68,68,0.25)",
+      borderRadius: 8,
+      cursor: "pointer"
+    }
+  }, "\u2715"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      flex: 1,
+      fontFamily: "monospace",
+      fontSize: 12
+    },
+    value: newTpl,
+    onChange: e => setNewTpl(e.target.value),
+    placeholder: "{SUBS} {VERBO} {SUBS}.",
+    onKeyDown: e => {
+      if (e.key === "Enter" && newTpl.trim()) {
+        setTemplates(t => [...t, newTpl.trim()]);
+        setNewTpl("");
+      }
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (newTpl.trim()) {
+        setTemplates(t => [...t, newTpl.trim()]);
+        setNewTpl("");
+      }
+    },
+    style: {
+      padding: "6px 14px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "+ Adicionar"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "center",
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Quantidade"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    style: {
+      ...inp,
+      width: 80
+    },
+    min: 1,
+    max: 20,
+    value: count,
+    onChange: e => setCount(parseInt(e.target.value) || 5)
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: generate,
+    style: {
+      marginTop: 14,
+      flex: 1,
+      padding: "10px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "\u2728 Gerar Frases")), generated.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 12
+    }
+  }, "FRASES GERADAS"), generated.map((ph, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      fontFamily: t.fD,
+      fontSize: 16,
+      color: t.text,
+      padding: "10px 0",
+      borderBottom: i < generated.length - 1 ? `1px solid ${t.cb}40` : "",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", null, ph), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      navigator.clipboard?.writeText(ph);
+      notify("Copiado!");
+    },
+    style: {
+      padding: "3px 8px",
+      background: t.ag,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 6,
+      cursor: "pointer",
+      fontSize: 11,
+      fontFamily: t.fB,
+      flexShrink: 0
+    }
+  }, "Copiar"))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      navigator.clipboard?.writeText(generated.join("\n"));
+      notify("Todas copiadas!");
+    },
+    style: {
+      marginTop: 12,
+      width: "100%",
+      padding: "8px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "Copiar Todas")));
+}
+
+// ── GRAMMATICAL CASES / CONJUGATION BUILDER ───────────────────────────────────
+function CasesPage({
+  dict,
+  t,
+  notify
+}) {
+  const [tables, setTables] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("vb_cases_" + dict?.id)) || [];
+    } catch {
+      return [];
+    }
+  });
+  const [creating, setCreating] = useState(false);
+  const [tf, setTf] = useState({
+    name: "",
+    type: "declension",
+    rows: [],
+    cols: [],
+    cells: {}
+  });
+  const [testWord, setTestWord] = useState("");
+  const save = t2 => {
+    localStorage.setItem("vb_cases_" + (dict?.id || ""), JSON.stringify(t2));
+  };
+  const addTable = () => {
+    if (!tf.name) {
+      notify("Dê um nome à tabela.", "err");
+      return;
+    }
+    const nt = {
+      ...tf,
+      id: genId(8),
+      created: tsNow()
+    };
+    const upd = [...tables, nt];
+    setTables(upd);
+    save(upd);
+    setCreating(false);
+    setTf({
+      name: "",
+      type: "declension",
+      rows: [],
+      cols: [],
+      cells: {}
+    });
+    notify("Tabela criada! ✅");
+  };
+  const delTable = id => {
+    const upd = tables.filter(t => t.id !== id);
+    setTables(upd);
+    save(upd);
+  };
+  const addRow = name => setTf(p => ({
+    ...p,
+    rows: [...p.rows, name.trim()]
+  }));
+  const addCol = name => setTf(p => ({
+    ...p,
+    cols: [...p.cols, name.trim()]
+  }));
+  const setCell = (r, c, v) => setTf(p => ({
+    ...p,
+    cells: {
+      ...p.cells,
+      [r + "__" + c]: v
+    }
+  }));
+  const applyWord = (table, word) => {
+    const result = {};
+    Object.entries(table.cells).forEach(([k, suffix]) => {
+      result[k] = word + suffix;
+    });
+    return result;
+  };
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "7px 10px",
+    borderRadius: 8,
+    fontFamily: t.fB,
+    fontSize: 13,
+    outline: "none"
+  };
+  if (creating) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 700
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCreating(false),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "6px 12px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12,
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "x"
+  }), "Cancelar"), /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      marginBottom: 16
+    }
+  }, "Nova Tabela de ", tf.type === "declension" ? "Declinação" : "Conjugação"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 4
+    }
+  }, "Nome da Tabela"), /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      width: "100%"
+    },
+    value: tf.name,
+    onChange: e => setTf(p => ({
+      ...p,
+      name: e.target.value
+    })),
+    placeholder: "ex: Declina\xE7\xE3o Nominal"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 4
+    }
+  }, "Tipo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, [["declension", "Declinação (casos)"], ["conjugation", "Conjugação (tempo/modo)"]].map(([v, lb]) => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => setTf(p => ({
+      ...p,
+      type: v
+    })),
+    style: {
+      padding: "6px 14px",
+      borderRadius: 8,
+      border: `1px solid ${tf.type === v ? t.accent : t.cb}`,
+      background: tf.type === v ? t.ag : "transparent",
+      color: tf.type === v ? t.accent : t.muted,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, lb)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 12,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 6
+    }
+  }, "Linhas (", tf.type === "declension" ? "casos" : "tempos", ")"), tf.rows.map((r, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      gap: 5,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      flex: 1,
+      fontSize: 12
+    },
+    value: r,
+    onChange: e => {
+      const rows = [...tf.rows];
+      rows[i] = e.target.value;
+      setTf(p => ({
+        ...p,
+        rows
+      }));
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setTf(p => ({
+      ...p,
+      rows: p.rows.filter((_, j) => j !== i)
+    })),
+    style: {
+      padding: "4px 8px",
+      background: "rgba(239,68,68,0.1)",
+      color: "#ef4444",
+      border: "none",
+      borderRadius: 6,
+      cursor: "pointer"
+    }
+  }, "\u2715"))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const v = prompt(tf.type === "declension" ? "Nome do caso (ex: Nominativo):" : "Nome do tempo (ex: Presente):");
+      if (v) addRow(v);
+    },
+    style: {
+      padding: "5px 12px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, "+ Linha")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 6
+    }
+  }, "Colunas (pessoa/n\xFAmero/g\xEAnero)"), tf.cols.map((c, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      gap: 5,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      flex: 1,
+      fontSize: 12
+    },
+    value: c,
+    onChange: e => {
+      const cols = [...tf.cols];
+      cols[i] = e.target.value;
+      setTf(p => ({
+        ...p,
+        cols
+      }));
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setTf(p => ({
+      ...p,
+      cols: p.cols.filter((_, j) => j !== i)
+    })),
+    style: {
+      padding: "4px 8px",
+      background: "rgba(239,68,68,0.1)",
+      color: "#ef4444",
+      border: "none",
+      borderRadius: 6,
+      cursor: "pointer"
+    }
+  }, "\u2715"))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const v = prompt("Nome da coluna (ex: Singular, 1ª pessoa):");
+      if (v) addCol(v);
+    },
+    style: {
+      padding: "5px 12px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, "+ Coluna"))), tf.rows.length > 0 && tf.cols.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16,
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 8
+    }
+  }, "SUFIXOS (o que adicionar \xE0 raiz da palavra)"), /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse"
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+    style: {
+      padding: "6px 10px",
+      background: t.surf,
+      fontFamily: t.fD,
+      fontSize: 11,
+      color: t.muted,
+      borderRadius: "8px 0 0 0"
+    }
+  }), tf.cols.map(c => /*#__PURE__*/React.createElement("th", {
+    key: c,
+    style: {
+      padding: "6px 10px",
+      background: t.surf,
+      fontFamily: t.fD,
+      fontSize: 11,
+      color: t.accent,
+      whiteSpace: "nowrap"
+    }
+  }, c)))), /*#__PURE__*/React.createElement("tbody", null, tf.rows.map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: "4px 10px",
+      fontFamily: t.fD,
+      fontSize: 11,
+      color: t.text,
+      background: t.surf,
+      whiteSpace: "nowrap"
+    }
+  }, r), tf.cols.map(c => /*#__PURE__*/React.createElement("td", {
+    key: c,
+    style: {
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      width: "100%",
+      fontSize: 12,
+      fontFamily: "monospace"
+    },
+    value: tf.cells[r + "__" + c] || "",
+    onChange: e => setCell(r, c, e.target.value),
+    placeholder: "-os"
+  })))))))), /*#__PURE__*/React.createElement("button", {
+    onClick: addTable,
+    style: {
+      padding: "10px 24px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "\u2705 Criar Tabela"));
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 20,
+      flexWrap: "wrap",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent
+    }
+  }, "Casos & Conjuga\xE7\xF5es"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 12
+    }
+  }, dict?.name, " \xB7 ", tables.length, " tabelas")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCreating(true),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "8px 16px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13,
+      fontWeight: 600
+    }
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "plus"
+  }), "Nova Tabela")), tables.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 60,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 48,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDCCA"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontStyle: "italic",
+      marginBottom: 16
+    }
+  }, "Crie tabelas de declina\xE7\xE3o ou conjuga\xE7\xE3o para qualquer palavra da sua conlang."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: t.muted,
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 16,
+      maxWidth: 400,
+      margin: "0 auto",
+      lineHeight: 1.7
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "Como funciona:"), /*#__PURE__*/React.createElement("br", null), "1. Crie uma tabela com linhas (casos/tempos) e colunas (n\xFAmero/pessoa)", /*#__PURE__*/React.createElement("br", null), "2. Preencha os sufixos de cada forma", /*#__PURE__*/React.createElement("br", null), "3. Teste com qualquer palavra do dicion\xE1rio"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setCreating(true),
+    style: {
+      marginTop: 20,
+      padding: "10px 24px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "Criar Primeira Tabela")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))",
+      gap: 14
+    }
+  }, tables.map(table => {
+    const applied = testWord ? applyWord(table, testWord) : {};
+    return /*#__PURE__*/React.createElement("div", {
+      key: table.id,
+      style: {
+        background: t.card,
+        border: `1px solid ${t.cb}`,
+        borderRadius: 16,
+        padding: 18
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 16,
+        color: t.accent
+      }
+    }, table.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: t.muted,
+        marginTop: 2
+      }
+    }, table.type === "declension" ? "Declinação" : "Conjugação", " \xB7 ", table.rows.length, "\xD7", table.cols.length)), /*#__PURE__*/React.createElement("button", {
+      onClick: () => delTable(table.id),
+      style: {
+        padding: "4px 8px",
+        background: "rgba(239,68,68,0.1)",
+        color: "#ef4444",
+        border: "1px solid rgba(239,68,68,0.2)",
+        borderRadius: 7,
+        cursor: "pointer",
+        fontSize: 11
+      }
+    }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      style: {
+        ...inp,
+        width: "100%",
+        fontSize: 13
+      },
+      value: testWord,
+      onChange: e => setTestWord(e.target.value),
+      placeholder: "Digite uma palavra para testar..."
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        overflowX: "auto"
+      }
+    }, /*#__PURE__*/React.createElement("table", {
+      style: {
+        width: "100%",
+        borderCollapse: "collapse",
+        fontSize: 12
+      }
+    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+      style: {
+        padding: "4px 8px",
+        background: t.surf,
+        fontFamily: t.fD,
+        fontSize: 10,
+        color: t.muted
+      }
+    }), table.cols.map(c => /*#__PURE__*/React.createElement("th", {
+      key: c,
+      style: {
+        padding: "4px 8px",
+        background: t.surf,
+        fontFamily: t.fD,
+        fontSize: 10,
+        color: t.accent,
+        whiteSpace: "nowrap"
+      }
+    }, c)))), /*#__PURE__*/React.createElement("tbody", null, table.rows.map(r => /*#__PURE__*/React.createElement("tr", {
+      key: r
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        padding: "4px 8px",
+        fontFamily: t.fD,
+        fontSize: 10,
+        color: t.muted,
+        background: t.surf + "80",
+        whiteSpace: "nowrap"
+      }
+    }, r), table.cols.map(c => {
+      const key = r + "__" + c;
+      const suffix = table.cells[key] || "—";
+      const full = testWord ? testWord + suffix.replace(/^-/, "") : "";
+      return /*#__PURE__*/React.createElement("td", {
+        key: c,
+        style: {
+          padding: "4px 8px",
+          textAlign: "center",
+          fontFamily: t.fD
+        }
+      }, testWord ? /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: t.accent
+        }
+      }, full) : /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: t.muted,
+          fontSize: 11
+        }
+      }, suffix));
+    })))))));
+  })));
+}
+
+// ── PHONOLOGICAL WORD GENERATOR ───────────────────────────────────────────────
+function PhonGenPage({
+  dict,
+  t,
+  notify
+}) {
+  const STORAGE_KEY = "vb_phongen_" + (dict?.id || "");
+  const [rules, setRules] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+        syllableStructures: ["CV", "CVC", "CV", "CVCV"],
+        maxSyllables: 3,
+        minSyllables: 1,
+        vowels: dict?.phonology?.usedVowels || ["a", "e", "i", "o", "u"],
+        consonants: (dict?.phonology?.usedConsonants || ["p", "t", "k", "m", "n", "s", "l", "r"]).slice(0, 12),
+        forbiddenClusters: ["ng", "kk", "pp"],
+        stressPosition: "penultimate",
+        count: 10
+      };
+    } catch {
+      return {
+        syllableStructures: ["CV", "CVC"],
+        maxSyllables: 2,
+        minSyllables: 1,
+        vowels: ["a", "e", "i", "o", "u"],
+        consonants: ["p", "t", "k", "m", "n", "s", "l"],
+        forbiddenClusters: [],
+        stressPosition: "penultimate",
+        count: 10
+      };
+    }
+  });
+  const [generated, setGenerated] = useState([]);
+  const [newStruct, setNewStruct] = useState("");
+  const [newForbid, setNewForbid] = useState("");
+  const saveRules = r => {
+    setRules(r);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(r));
+    } catch {}
+  };
+  const generateWord = () => {
+    const syllCount = rules.minSyllables + Math.floor(Math.random() * (rules.maxSyllables - rules.minSyllables + 1));
+    let word = "";
+    const structs = rules.syllableStructures.length ? rules.syllableStructures : ["CV"];
+    const Vs = rules.vowels.length ? rules.vowels : ["a", "e", "i", "o", "u"];
+    const Cs = rules.consonants.length ? rules.consonants : ["p", "t", "k", "m", "n"];
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    for (let i = 0; i < syllCount; i++) {
+      const struct = pick(structs);
+      let syll = "";
+      for (const ch of struct) {
+        if (ch === "V") syll += pick(Vs);else if (ch === "C") syll += pick(Cs);else syll += ch;
+      }
+      word += syll;
+    }
+    // Check forbidden clusters
+    const forbidden = rules.forbiddenClusters || [];
+    for (const fc of forbidden) {
+      if (word.includes(fc)) return null; // Retry
+    }
+    return word;
+  };
+  const generate = () => {
+    if (!rules.vowels.length || !rules.consonants.length) {
+      notify("Configure ao menos vogais e consoantes nas regras.", "err");
+      return;
+    }
+    const words = [];
+    let attempts = 0;
+    while (words.length < rules.count && attempts < 500) {
+      attempts++;
+      const w = generateWord();
+      if (w && !words.includes(w)) words.push(w);
+    }
+    if (!words.length) {
+      notify("Não foi possível gerar palavras com as regras atuais. Revise os clusters proibidos.", "err");
+      return;
+    }
+    setGenerated(words);
+    if (words.length < rules.count) notify(`Geradas ${words.length} palavras (${rules.count - words.length} bloqueadas pelas regras de cluster).`, "info");
+  };
+  const inp = {
+    background: t.inp,
+    border: `1px solid ${t.cb}`,
+    color: t.text,
+    padding: "7px 10px",
+    borderRadius: 8,
+    fontFamily: t.fB,
+    fontSize: 13,
+    outline: "none"
+  };
+  const lbl = {
+    fontSize: 9,
+    color: t.muted,
+    fontFamily: t.fD,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    display: "block",
+    marginBottom: 5
+  };
+  const box = {
+    background: t.card,
+    border: `1px solid ${t.cb}`,
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 14
+  };
+  const hdStyle = {
+    fontFamily: t.fD,
+    color: t.accent,
+    fontSize: 11,
+    letterSpacing: 1,
+    marginBottom: 10
+  };
+  const allIpaV = ["a", "e", "i", "o", "u", "ɛ", "ɔ", "æ", "ə", "ɪ", "ʊ", "y", "ø", "ɯ", "ɑ"];
+  const allIpaC = ["p", "b", "t", "d", "k", "g", "f", "v", "s", "z", "ʃ", "ʒ", "m", "n", "ŋ", "l", "r", "h", "j", "w", "x", "tʃ", "dʒ"];
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 720
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent,
+      marginBottom: 4
+    }
+  }, "Gerador Fonol\xF3gico"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 13,
+      marginBottom: 6
+    }
+  }, "Gera palavras novas que respeitam 100% as regras fonol\xF3gicas da sua conlang."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(245,158,11,0.08)",
+      border: "1px solid rgba(245,158,11,0.25)",
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 18,
+      fontSize: 12,
+      color: "#f59e0b",
+      lineHeight: 1.7
+    }
+  }, "\uD83D\uDCA1 ", /*#__PURE__*/React.createElement("strong", null, "Como configurar para melhores resultados:"), /*#__PURE__*/React.createElement("br", null), "1. Selecione as ", /*#__PURE__*/React.createElement("strong", null, "vogais"), " que existem na sua l\xEDngua", /*#__PURE__*/React.createElement("br", null), "2. Selecione as ", /*#__PURE__*/React.createElement("strong", null, "consoantes"), " permitidas", /*#__PURE__*/React.createElement("br", null), "3. Defina as ", /*#__PURE__*/React.createElement("strong", null, "estruturas sil\xE1bicas"), " (CV = consoante+vogal, CVC = cons+vogal+cons, etc.)", /*#__PURE__*/React.createElement("br", null), "4. Adicione ", /*#__PURE__*/React.createElement("strong", null, "clusters proibidos"), " (sequ\xEAncias que n\xE3o podem ocorrer)", /*#__PURE__*/React.createElement("br", null), "5. Clique ", /*#__PURE__*/React.createElement("strong", null, "Gerar"), " \u2014 as palavras seguir\xE3o exatamente essas regras"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 14,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hdStyle
+  }, "\uD83D\uDD24 VOGAIS (", rules.vowels.length, " selecionadas)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 5
+    }
+  }, allIpaV.map(v => {
+    const on = rules.vowels.includes(v);
+    return /*#__PURE__*/React.createElement("button", {
+      key: v,
+      onClick: () => saveRules({
+        ...rules,
+        vowels: on ? rules.vowels.filter(x => x !== v) : [...rules.vowels, v]
+      }),
+      style: {
+        padding: "5px 10px",
+        borderRadius: 7,
+        border: `1px solid ${on ? t.accent : t.cb}`,
+        background: on ? t.ag : "transparent",
+        color: on ? t.accent : t.muted,
+        cursor: "pointer",
+        fontFamily: "monospace",
+        fontSize: 14,
+        minWidth: 36
+      }
+    }, v);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Personalizadas (v\xEDrgula)"), /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      width: "100%",
+      fontSize: 12,
+      fontFamily: "monospace"
+    },
+    placeholder: "\u01CE, \xEA, \u0151...",
+    onBlur: e => {
+      const extra = e.target.value.split(",").map(x => x.trim()).filter(Boolean);
+      if (extra.length) saveRules({
+        ...rules,
+        vowels: [...new Set([...rules.vowels, ...extra])]
+      });
+      e.target.value = "";
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hdStyle
+  }, "\uD83D\uDD21 CONSOANTES (", rules.consonants.length, " selecionadas)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 5
+    }
+  }, allIpaC.map(c => {
+    const on = rules.consonants.includes(c);
+    return /*#__PURE__*/React.createElement("button", {
+      key: c,
+      onClick: () => saveRules({
+        ...rules,
+        consonants: on ? rules.consonants.filter(x => x !== c) : [...rules.consonants, c]
+      }),
+      style: {
+        padding: "4px 8px",
+        borderRadius: 7,
+        border: `1px solid ${on ? t.accent : t.cb}`,
+        background: on ? t.ag : "transparent",
+        color: on ? t.accent : t.muted,
+        cursor: "pointer",
+        fontFamily: "monospace",
+        fontSize: 13,
+        minWidth: 36
+      }
+    }, c);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Personalizadas (v\xEDrgula)"), /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      width: "100%",
+      fontSize: 12,
+      fontFamily: "monospace"
+    },
+    placeholder: "\u03B8, \xF0, \u0294...",
+    onBlur: e => {
+      const extra = e.target.value.split(",").map(x => x.trim()).filter(Boolean);
+      if (extra.length) saveRules({
+        ...rules,
+        consonants: [...new Set([...rules.consonants, ...extra])]
+      });
+      e.target.value = "";
+    }
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hdStyle
+  }, "\uD83C\uDFD7\uFE0F ESTRUTURAS SIL\xC1BICAS"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "C"), " = consoante \xB7 ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "V"), " = vogal \xB7 ex: ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "CV"), " (ma, li), ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "CVC"), " (man, tal), ", /*#__PURE__*/React.createElement("code", {
+    style: {
+      color: t.accent
+    }
+  }, "CVCV"), " (mala)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, rules.syllableStructures.map((s, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5,
+      background: t.ag,
+      border: `1px solid ${t.cb}`,
+      padding: "3px 10px",
+      borderRadius: 20,
+      fontFamily: "monospace",
+      fontSize: 13,
+      color: t.accent
+    }
+  }, s, /*#__PURE__*/React.createElement("span", {
+    onClick: () => saveRules({
+      ...rules,
+      syllableStructures: rules.syllableStructures.filter((_, j) => j !== i)
+    }),
+    style: {
+      cursor: "pointer",
+      color: t.muted,
+      marginLeft: 2
+    }
+  }, "\u2715")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      fontFamily: "monospace",
+      flex: 1
+    },
+    value: newStruct,
+    onChange: e => setNewStruct(e.target.value.toUpperCase().replace(/[^CV]/g, "")),
+    placeholder: "CVC",
+    onKeyDown: e => {
+      if (e.key === "Enter" && newStruct) {
+        saveRules({
+          ...rules,
+          syllableStructures: [...rules.syllableStructures, newStruct]
+        });
+        setNewStruct("");
+      }
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (newStruct) {
+        saveRules({
+          ...rules,
+          syllableStructures: [...rules.syllableStructures, newStruct]
+        });
+        setNewStruct("");
+      }
+    },
+    style: {
+      padding: "6px 14px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 13
+    }
+  }, "+ Adicionar"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 14,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hdStyle
+  }, "\uD83D\uDEAB CLUSTERS PROIBIDOS"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginBottom: 8
+    }
+  }, "Sequ\xEAncias de sons que n\xE3o podem aparecer juntas na l\xEDngua."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 5,
+      marginBottom: 8
+    }
+  }, rules.forbiddenClusters.map((fc, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    onClick: () => saveRules({
+      ...rules,
+      forbiddenClusters: rules.forbiddenClusters.filter((_, j) => j !== i)
+    }),
+    style: {
+      background: "rgba(239,68,68,0.1)",
+      color: "#ef4444",
+      border: "1px solid rgba(239,68,68,0.25)",
+      padding: "2px 9px",
+      borderRadius: 20,
+      fontFamily: "monospace",
+      fontSize: 12,
+      cursor: "pointer"
+    }
+  }, fc, " \u2715"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    style: {
+      ...inp,
+      fontFamily: "monospace",
+      flex: 1
+    },
+    value: newForbid,
+    onChange: e => setNewForbid(e.target.value),
+    placeholder: "ng, kk, ...",
+    onKeyDown: e => {
+      if (e.key === "Enter" && newForbid.trim()) {
+        saveRules({
+          ...rules,
+          forbiddenClusters: [...rules.forbiddenClusters, newForbid.trim()]
+        });
+        setNewForbid("");
+      }
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (newForbid.trim()) {
+        saveRules({
+          ...rules,
+          forbiddenClusters: [...rules.forbiddenClusters, newForbid.trim()]
+        });
+        setNewForbid("");
+      }
+    },
+    style: {
+      padding: "6px 10px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 8,
+      cursor: "pointer",
+      fontSize: 13
+    }
+  }, "+"))), /*#__PURE__*/React.createElement("div", {
+    style: box
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hdStyle
+  }, "\u2699\uFE0F CONFIGURA\xC7\xD5ES"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "M\xEDn. de s\xEDlabas"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    style: {
+      ...inp,
+      width: "100%"
+    },
+    min: 1,
+    max: 5,
+    value: rules.minSyllables,
+    onChange: e => saveRules({
+      ...rules,
+      minSyllables: parseInt(e.target.value) || 1
+    })
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "M\xE1x. de s\xEDlabas"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    style: {
+      ...inp,
+      width: "100%"
+    },
+    min: 1,
+    max: 8,
+    value: rules.maxSyllables,
+    onChange: e => saveRules({
+      ...rules,
+      maxSyllables: parseInt(e.target.value) || 2
+    })
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    style: lbl
+  }, "Quantidade a gerar"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    style: {
+      ...inp,
+      width: "100%"
+    },
+    min: 1,
+    max: 100,
+    value: rules.count,
+    onChange: e => saveRules({
+      ...rules,
+      count: parseInt(e.target.value) || 10
+    })
+  })))), /*#__PURE__*/React.createElement("button", {
+    onClick: generate,
+    style: {
+      width: "100%",
+      padding: "13px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 12,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 15,
+      fontWeight: 600,
+      marginBottom: 16
+    }
+  }, "\u2728 Gerar ", rules.count, " Palavras"), generated.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: hdStyle
+  }, "PALAVRAS GERADAS (", generated.length, ")"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      navigator.clipboard?.writeText(generated.join(", "));
+      notify("Copiadas!");
+    },
+    style: {
+      padding: "4px 12px",
+      background: t.ag,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, "Copiar todas")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, generated.map((w, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      padding: "8px 14px",
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 16,
+      color: t.accent
+    }
+  }, w), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      navigator.clipboard?.writeText(w);
+      notify(`"${w}" copiado!`);
+    },
+    style: {
+      padding: "2px 6px",
+      background: "transparent",
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 5,
+      cursor: "pointer",
+      fontSize: 10
+    }
+  }, "copiar")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      fontSize: 11,
+      color: t.muted
+    }
+  }, "\uD83D\uDCA1 Dica: Copie as palavras que gostar e adicione-as ao dicion\xE1rio com ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, "Nova Palavra"), ".")));
+}
+
+// ── STATISTICS PAGE ───────────────────────────────────────────────────────────
+function StatsPage({
+  dict,
+  study,
+  srsData,
+  t
+}) {
+  const entries = dict?.entries || [];
+  const srsStats = entries.map(e => ({
+    word: e.word,
+    srs: srsData?.[e.id]
+  })).filter(e => e.srs);
+  const mastered = srsStats.filter(e => e.srs.interval >= 7).length;
+  const learning = srsStats.filter(e => e.srs.interval > 0 && e.srs.interval < 7).length;
+  const notStarted = entries.length - srsStats.length;
+  const byClass = {};
+  entries.forEach(e => {
+    byClass[e.class] = (byClass[e.class] || 0) + 1;
+  });
+  const topClass = Object.entries(byClass).sort((a, b) => b[1] - a[1]);
+  const withAudio = entries.filter(e => e.audio).length;
+  const withImg = entries.filter(e => e.image).length;
+  const withDef = entries.filter(e => e.definition?.length > 10).length;
+  const byMonth = {};
+  entries.forEach(e => {
+    const m = e.created?.slice(0, 7) || "?";
+    byMonth[m] = (byMonth[m] || 0) + 1;
+  });
+  const months = Object.keys(byMonth).sort();
+  const maxM = Math.max(...Object.values(byMonth));
+  const card = (ic, val, lb, color) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: 16,
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 28,
+      marginBottom: 4
+    }
+  }, ic), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 24,
+      color: color || t.accent
+    }
+  }, val), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 2
+    }
+  }, lb));
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent,
+      marginBottom: 20
+    }
+  }, "Estat\xEDsticas \u2014 ", dict?.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))",
+      gap: 10,
+      marginBottom: 20
+    }
+  }, card("📖", entries.length, "Total de Palavras"), card("🎓", mastered, "Dominadas (SRS)", "#22c55e"), card("📚", learning, "Aprendendo", "#f59e0b"), card("🌱", notStarted, "Não iniciadas", "#8b949e"), card("🔊", withAudio, "Com Áudio", "#60a5fa"), card("🖼️", withImg, "Com Imagem", "#a78bfa"), card("📝", withDef, "Com Definição", "#34d399"), card("⚡", study?.xp || 0, "XP Total", t.accent)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDCCA DISTRIBUI\xC7\xC3O POR CLASSE"), topClass.map(([cls, cnt]) => /*#__PURE__*/React.createElement("div", {
+    key: cls,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      width: 90,
+      flexShrink: 0
+    }
+  }, cls), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      background: t.surf,
+      borderRadius: 99,
+      height: 12,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${cnt / entries.length * 100}%`,
+      height: "100%",
+      background: t.accent,
+      borderRadius: 99,
+      opacity: 0.8
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.accent,
+      fontFamily: t.fD,
+      width: 30,
+      textAlign: "right"
+    }
+  }, cnt)))), months.length > 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDCC8 CRESCIMENTO MENSAL"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-end",
+      gap: 4,
+      height: 80
+    }
+  }, months.map(m => {
+    const h = Math.max(6, Math.round(byMonth[m] / maxM * 72));
+    return /*#__PURE__*/React.createElement("div", {
+      key: m,
+      style: {
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 3
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: t.accent
+      }
+    }, byMonth[m]), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: "100%",
+        height: h,
+        background: t.accent,
+        borderRadius: "4px 4px 0 0",
+        opacity: 0.85
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 7,
+        color: t.muted,
+        writingMode: "vertical-lr",
+        transform: "rotate(180deg)",
+        maxHeight: 28,
+        overflow: "hidden"
+      }
+    }, m.slice(5), "/", m.slice(2, 4)));
+  }))));
+}
+
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 function Verbarium() {
   const screen = useScreen();
@@ -11620,6 +14585,7 @@ function Verbarium() {
   const [notif, setNotif] = useState(null);
   const [importPanel, setImportPanel] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // dictId to delete
+  const [srsDataState, setSrsDataState] = useState(() => ld("vb_srs", {}));
   const [localUser, setLocalUser] = useState(() => getLocalUser());
   const [fbReady, setFbReady] = useState(false);
   const [fbConfig, setFbConfig] = useState(() => ld("vb_fb_config", null));
@@ -11758,6 +14724,7 @@ function Verbarium() {
     }
   }, []); // eslint-disable-line
 
+  const onlineUsers = useOnlinePresence(authUser, actDict, fbReady);
   const t = useMemo(() => {
     if (theme === "custom") {
       const base = buildCustomTheme(customThemeCfg);
@@ -11853,6 +14820,7 @@ function Verbarium() {
       });
       addXP(10);
       notify("Atualizado! +10 XP ✨");
+      logActivity(dict.id, authUser || localUser, "edit", `Editou a palavra "${f.word}"`, fbReady);
     } else {
       updDict({
         ...dict,
@@ -11864,17 +14832,20 @@ function Verbarium() {
       });
       addXP(25);
       notify("Adicionada! +25 XP 🎉");
+      logActivity(dict.id, authUser || localUser, "add", `Adicionou "${f.word}" (${f.translation}) · ${f.class}`, fbReady);
     }
     setEModal(false);
     setEditE(null);
   };
   const delEntry = id => {
+    const e = dict.entries.find(x => x.id === id);
     updDict({
       ...dict,
       entries: dict.entries.filter(e => e.id !== id)
     });
     setDetailEntry(null);
     notify("Removida.", "info");
+    if (e) logActivity(dict.id, authUser || localUser, "delete", `Removeu a palavra "${e.word}"`, fbReady);
   };
   const savePhrase = f => {
     if (!f.phrase || !f.translation) {
@@ -11984,6 +14955,14 @@ function Verbarium() {
     n: "book",
     lb: "Timeline"
   }, {
+    id: "history",
+    n: "book",
+    lb: "Histórico"
+  }, {
+    id: "stats",
+    n: "trophy",
+    lb: "Stats"
+  }, {
     id: "about",
     n: "globe",
     lb: "Sobre"
@@ -12013,6 +14992,10 @@ function Verbarium() {
     n: "game",
     lb: L.nav.games
   }, {
+    id: "phongen",
+    n: "sound",
+    lb: "Gerador"
+  }, {
     id: "settings",
     n: "settings",
     lb: L.nav.settings
@@ -12040,8 +15023,8 @@ function Verbarium() {
     @keyframes eclipseGlow{from{opacity:.5}to{opacity:.9}}
     html,body{height:100%;overflow:hidden;}
     .app{height:100vh;display:flex;flex-direction:column;background:${t.bg};font-family:${t.fB};color:${t.text};overflow:hidden;position:relative;}
-    ${t.sp === "brasil" ? `@keyframes brPulse{from{opacity:.5}to{opacity:.9}}.app::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 30% 30%,rgba(0,150,60,.06),transparent 55%),radial-gradient(ellipse at 70% 70%,rgba(255,200,0,.05),transparent 50%);pointer-events:none;z-index:0;animation:brPulse 6s ease-in-out infinite alternate;}` : ""}
-    ${t.sp === "brasil" ? `@keyframes brPulse{from{opacity:.5}to{opacity:.9}}.app::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 30% 30%,rgba(0,150,60,.06),transparent 55%),radial-gradient(ellipse at 70% 70%,rgba(255,200,0,.05),transparent 50%);pointer-events:none;z-index:0;animation:brPulse 6s ease-in-out infinite alternate;}` : ""}
+    ${t.sp === "brasil" ? `@keyframes brPulse{from{opacity:.4}to{opacity:.85}}.app::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 50% 40% at 20% 20%,rgba(0,160,60,.13),transparent 60%),radial-gradient(ellipse 60% 50% at 80% 80%,rgba(255,200,0,.15),transparent 55%),radial-gradient(ellipse 40% 30% at 70% 20%,rgba(0,100,180,.06),transparent 50%),transparent 50%);pointer-events:none;z-index:0;animation:brPulse 6s ease-in-out infinite alternate;}` : ""}
+    ${t.sp === "brasil" ? `@keyframes brPulse{from{opacity:.4}to{opacity:.85}}.app::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 50% 40% at 20% 20%,rgba(0,160,60,.13),transparent 60%),radial-gradient(ellipse 60% 50% at 80% 80%,rgba(255,200,0,.15),transparent 55%),radial-gradient(ellipse 40% 30% at 70% 20%,rgba(0,100,180,.06),transparent 50%),transparent 50%);pointer-events:none;z-index:0;animation:brPulse 6s ease-in-out infinite alternate;}` : ""}
     .app>*{position:relative;z-index:1;}
     .hdr{background:${t.hdr};backdrop-filter:blur(20px);border-bottom:1px solid ${t.cb};padding:0 16px;display:flex;align-items:center;gap:10px;height:56px;flex-shrink:0;}
     .logo{font-family:${t.fD};font-size:clamp(14px,3vw,19px);color:${t.accent};text-shadow:0 0 18px ${t.ag};white-space:nowrap;flex-shrink:0;letter-spacing:.5px;}
@@ -12171,7 +15154,37 @@ function Verbarium() {
     }
   }, /*#__PURE__*/React.createElement(Ic, {
     n: "plus"
-  }), /*#__PURE__*/React.createElement("span", null, "Novo Idioma")), fbReady && !authUser && /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("span", null, "Novo Idioma")), /*#__PURE__*/React.createElement("div", {
+    className: "ssec",
+    style: {
+      marginTop: 8
+    }
+  }, "Ferramentas"), [{
+    id: "phongen",
+    lb: "🎲 Gerador Fonológico"
+  }, {
+    id: "cases",
+    lb: "📊 Casos & Conjugações"
+  }, {
+    id: "textgen",
+    lb: "✍️ Gerador de Texto"
+  }, {
+    id: "quiz",
+    lb: "🎯 Quiz"
+  }, {
+    id: "families",
+    lb: "🌿 Famílias Lexicais"
+  }, {
+    id: "history",
+    lb: "📋 Histórico"
+  }, {
+    id: "stats",
+    lb: "📈 Estatísticas"
+  }].map(item => /*#__PURE__*/React.createElement("div", {
+    key: item.id,
+    className: `ni${tab === item.id ? " a" : ""}`,
+    onClick: () => navTo(item.id)
+  }, /*#__PURE__*/React.createElement("span", null, item.lb))), !authUser && /*#__PURE__*/React.createElement("div", {
     onClick: () => onLoginRequest(),
     style: {
       margin: "8px 4px 0",
@@ -12203,7 +15216,7 @@ function Verbarium() {
       color: t.muted,
       lineHeight: 1.4
     }
-  }, "Salva suas l\xEDnguas na nuvem automaticamente")), fbReady && authUser && /*#__PURE__*/React.createElement("div", {
+  }, "Salva suas l\xEDnguas na nuvem automaticamente")), authUser && /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "8px 4px 0",
       padding: "8px 12px",
@@ -12280,7 +15293,7 @@ function Verbarium() {
     study: study,
     t: t,
     onSignOut: () => authBridge.signOut()
-  }) : fbReady && /*#__PURE__*/React.createElement("button", {
+  }) : !authUser && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowLogin(true),
     style: {
       display: "flex",
@@ -12438,7 +15451,7 @@ function Verbarium() {
       color: t.muted,
       marginTop: 2
     }
-  }, lb)))), fbReady && !authUser && /*#__PURE__*/React.createElement("div", {
+  }, lb)))), !authUser && /*#__PURE__*/React.createElement("div", {
     onClick: () => setShowLogin(true),
     style: {
       background: `linear-gradient(135deg,${t.accent}18,${t.ag})`,
@@ -12498,7 +15511,7 @@ function Verbarium() {
       fontWeight: 600,
       whiteSpace: "nowrap"
     }
-  }, "Entrar")), fbReady && authUser && /*#__PURE__*/React.createElement("div", {
+  }, "Entrar")), authUser && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(34,197,94,0.08)",
       border: "1px solid rgba(34,197,94,0.25)",
@@ -13641,7 +16654,55 @@ function Verbarium() {
   }), tab === "timeline" && /*#__PURE__*/React.createElement(TimelinePage, {
     dict: dict,
     t: t
-  }), tab === "about" && /*#__PURE__*/React.createElement(AboutPage, {
+  }), tab === "history" && /*#__PURE__*/React.createElement(ErrorBoundary, {
+    t: t
+  }, /*#__PURE__*/React.createElement(HistoryPage, {
+    dict: dict,
+    authUser: authUser,
+    fbReady: fbReady,
+    onlineUsers: onlineUsers,
+    t: t
+  })), tab === "stats" && /*#__PURE__*/React.createElement(ErrorBoundary, {
+    t: t
+  }, /*#__PURE__*/React.createElement(StatsPage, {
+    dict: dict,
+    study: study,
+    srsData: srsData,
+    t: t
+  })), tab === "families" && /*#__PURE__*/React.createElement(ErrorBoundary, {
+    t: t
+  }, /*#__PURE__*/React.createElement(WordFamiliesPage, {
+    dict: dict,
+    t: t,
+    onSelectWord: e => {
+      setDetailEntry(e);
+      setTab("dictionary");
+    }
+  })), tab === "quiz" && /*#__PURE__*/React.createElement(ErrorBoundary, {
+    t: t
+  }, /*#__PURE__*/React.createElement(QuizPage, {
+    dict: dict,
+    t: t,
+    notify: notify
+  })), tab === "textgen" && /*#__PURE__*/React.createElement(ErrorBoundary, {
+    t: t
+  }, /*#__PURE__*/React.createElement(TextGeneratorPage, {
+    dict: dict,
+    t: t,
+    notify: notify
+  })), tab === "cases" && /*#__PURE__*/React.createElement(ErrorBoundary, {
+    t: t
+  }, /*#__PURE__*/React.createElement(CasesPage, {
+    dict: dict,
+    t: t,
+    notify: notify
+  })), tab === "phongen" && /*#__PURE__*/React.createElement(ErrorBoundary, {
+    t: t
+  }, /*#__PURE__*/React.createElement(PhonGenPage, {
+    dict: dict,
+    t: t,
+    notify: notify
+  })), tab === "about" && /*#__PURE__*/React.createElement(AboutPage, {
     t: t
   }), tab === "settings" && /*#__PURE__*/React.createElement(ErrorBoundary, {
     t: t
@@ -14218,7 +17279,7 @@ try{
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
-    navigator.serviceWorker.register('sw.js')
+    navigator.serviceWorker.register('/verbarium/sw.js',{scope:'/verbarium/'})
       .then(function(reg){
         console.log('[SW] Registrado:',reg.scope);
         // Check for updates every 60 seconds

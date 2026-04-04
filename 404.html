@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>Verbarium PRO</title>
+<script>
+// Redirect all 404s to the Verbarium app
+sessionStorage.setItem('spa_redirect', window.location.pathname + window.location.search);
+window.location.replace('/verbarium/');
+</script>
+</head>
+<body>
+<p style="font-family:sans-serif;text-align:center;margin-top:40vh;color:#666">
+  Redirecionando para o Verbarium...
+</p>
+</body>
+</html>

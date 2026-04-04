@@ -2,14 +2,17 @@
   "name": "Verbarium PRO",
   "short_name": "Verbarium",
   "description": "O dicionário definitivo para criadores de línguas construídas (conlangs). Vocabulário, gramática, fonologia, lições e jogos.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/verbarium/",
+  "scope": "/verbarium/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
   "lang": "pt-BR",
-  "categories": ["education", "utilities", "lifestyle"],
+  "categories": [
+    "education",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "icons/icon-72.png",
@@ -60,21 +63,36 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [],
   "shortcuts": [
     {
       "name": "Dicionário",
-      "short_name": "Dicionário",
-      "description": "Abrir o dicionário diretamente",
-      "url": "/?tab=dictionary",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+      "url": "/verbarium/?tab=dictionary",
+      "icons": [
+        {
+          "src": "icons/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
     },
     {
       "name": "Jogos",
-      "short_name": "Jogos",
-      "description": "Ir direto para os jogos de vocabulário",
-      "url": "/?tab=games",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+      "url": "/verbarium/?tab=games",
+      "icons": [
+        {
+          "src": "icons/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Gerador",
+      "url": "/verbarium/?tab=phongen",
+      "icons": [
+        {
+          "src": "icons/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ]
 }
