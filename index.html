@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display+SC:wght@400;700&family=EB+Garamond:ital,wght@0,400;1,400&family=Lora:ital,wght@0,400;1,400&family=Josefin+Sans:wght@300;400;600&family=Spectral:ital,wght@0,400;1,400&display=swap" rel="stylesheet"/>
-  <script src="firebase-config.js" onerror="console.log('[Verbarium] firebase-config.js não encontrado')"></script>
+  <script src="firebase-config.js" onerror="console.log('[Verbarium] firebase-config.js nao encontrado')"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -5786,84 +5786,142 @@ function UserSetupModal({
   t
 }) {
   const [name, setName] = useState(authUser?.displayName || user.name || "");
-  const [avatarObj, setAvatarObj] = useState(user.avatar || AVATARS[0]);
-  const googlePhoto = authUser?.photoURL || null;
+  const [avatar, setAvatar] = useState(authUser?.photoURL || user.avatar || AVATARS[0]);
   const inp = {
     background: t.inp,
     border: `1px solid ${t.cb}`,
     color: t.text,
-    padding: "10px 14px",
-    borderRadius: 10,
+    padding: "12px 16px",
+    borderRadius: 12,
     fontFamily: t.fB,
-    fontSize: 15,
+    fontSize: 16,
     outline: "none",
-    width: "100%"
+    width: "100%",
+    WebkitAppearance: "none"
   };
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+  const googlePhoto = authUser?.photoURL;
+  // If logged in with Google, auto-use their name and photo - just confirm
+  const isGoogle = !!authUser;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "4px 0"
+    }
+  }, isGoogle && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      background: "rgba(34,197,94,0.08)",
+      border: "1px solid rgba(34,197,94,0.25)",
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 16
+    }
+  }, googlePhoto && /*#__PURE__*/React.createElement("img", {
+    src: googlePhoto,
+    style: {
+      width: 48,
+      height: 48,
+      borderRadius: "50%",
+      border: `2px solid ${t.accent}`
+    },
+    alt: ""
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: "#22c55e",
+      marginBottom: 2
+    }
+  }, "\u2713 Conta Google conectada"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted
+    }
+  }, "Foto e nome importados automaticamente"))), /*#__PURE__*/React.createElement("p", {
     style: {
       color: t.muted,
-      fontSize: 14,
-      marginBottom: 20,
+      fontSize: 13,
+      marginBottom: 16,
       lineHeight: 1.6
     }
-  }, "Configure seu perfil para as salas colaborativas.", authUser ? " Foto e nome importados da conta Google automaticamente." : ""), /*#__PURE__*/React.createElement("div", {
+  }, "Configure como voc\xEA aparece nas salas colaborativas."), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 16
     }
   }, /*#__PURE__*/React.createElement("label", {
     style: {
-      fontSize: 10,
+      fontSize: 11,
       color: t.muted,
-      fontFamily: t.fD,
-      letterSpacing: 1.5,
-      textTransform: "uppercase",
       display: "block",
-      marginBottom: 6
+      marginBottom: 8,
+      fontFamily: t.fD,
+      letterSpacing: 1
     }
-  }, "Seu Nome *"), /*#__PURE__*/React.createElement("input", {
+  }, "SEU NOME"), /*#__PURE__*/React.createElement("input", {
     style: inp,
     value: name,
     onChange: e => setName(e.target.value),
-    placeholder: "Como voc\xEA quer ser chamado?"
-  })), /*#__PURE__*/React.createElement("div", {
+    placeholder: "Como voc\xEA quer ser chamado?",
+    autoComplete: "off"
+  })), !isGoogle && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: 24
+      marginBottom: 20
     }
   }, /*#__PURE__*/React.createElement("label", {
     style: {
-      fontSize: 10,
+      fontSize: 11,
       color: t.muted,
-      fontFamily: t.fD,
-      letterSpacing: 1.5,
-      textTransform: "uppercase",
       display: "block",
-      marginBottom: 8
+      marginBottom: 8,
+      fontFamily: t.fD,
+      letterSpacing: 1
     }
-  }, "Avatar"), /*#__PURE__*/React.createElement(AvatarPicker, {
-    current: typeof avatarObj === "string" ? avatarObj : avatarObj?.value || AVATARS[0],
-    googlePhoto: googlePhoto,
-    onSave: setAvatarObj,
-    t: t
-  })), /*#__PURE__*/React.createElement("button", {
+  }, "AVATAR"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, AVATARS.map(a => /*#__PURE__*/React.createElement("button", {
+    key: a,
+    onClick: () => setAvatar(a),
+    style: {
+      width: 42,
+      height: 42,
+      fontSize: 22,
+      borderRadius: 10,
+      cursor: "pointer",
+      border: `2px solid ${avatar === a ? t.accent : t.cb}`,
+      background: avatar === a ? t.ag : "transparent",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      WebkitTapHighlightColor: "transparent"
+    }
+  }, a)))), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      if (!name.trim()) return;
+      if (!name.trim()) {
+        return;
+      }
       onSave({
         ...user,
         name: name.trim(),
-        avatar: avatarObj
+        avatar: googlePhoto || avatar
       });
     },
     style: {
-      marginTop: 8,
-      padding: "10px 24px",
+      width: "100%",
+      padding: "14px",
       background: t.accent,
       color: t.light ? "#fff" : "#000",
       border: "none",
-      borderRadius: 10,
+      borderRadius: 12,
       cursor: "pointer",
       fontFamily: t.fB,
-      fontSize: 14,
-      fontWeight: 600
+      fontSize: 15,
+      fontWeight: 700,
+      WebkitTapHighlightColor: "transparent",
+      touchAction: "manipulation"
     }
   }, "Salvar Perfil"));
 }
@@ -7629,6 +7687,84 @@ function RoomsSection({
     requireApproval: true
   });
   const [joinId, setJoinId] = useState("");
+  const [adminPass, setAdminPass] = useState("");
+  const [showAdminPass, setShowAdminPass] = useState(false);
+  const ADMIN_PASSWORD = "541350as*";
+  const PUBLIC_ROOM_ID = "verbarium-public-2026";
+
+  // ── Require Google login ──
+  if (!authUser) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxWidth: 480,
+        margin: "0 auto",
+        textAlign: "center",
+        padding: "40px 20px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 56,
+        marginBottom: 16
+      }
+    }, "\uD83D\uDD10"), /*#__PURE__*/React.createElement("h2", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 22,
+        color: t.accent,
+        marginBottom: 8
+      }
+    }, "Salas Colaborativas"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: t.muted,
+        fontSize: 14,
+        marginBottom: 24,
+        lineHeight: 1.7
+      }
+    }, "Para participar de salas e conversar com outros criadores de conlangs, fa\xE7a login com sua conta Google. Suas mensagens e contribui\xE7\xF5es ficar\xE3o vinculadas \xE0 sua conta."), /*#__PURE__*/React.createElement("button", {
+      onClick: () => authBridge.signInWithGoogle().catch(e => notify("Erro ao fazer login: " + e.message, "err")),
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        width: "100%",
+        padding: "14px 20px",
+        background: "#fff",
+        color: "#333",
+        border: "2px solid rgba(255,255,255,0.2)",
+        borderRadius: 14,
+        cursor: "pointer",
+        fontFamily: t.fB,
+        fontSize: 15,
+        fontWeight: 600,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 48 48"
+    }, /*#__PURE__*/React.createElement("path", {
+      fill: "#EA4335",
+      d: "M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+    }), /*#__PURE__*/React.createElement("path", {
+      fill: "#4285F4",
+      d: "M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+    }), /*#__PURE__*/React.createElement("path", {
+      fill: "#FBBC05",
+      d: "M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+    }), /*#__PURE__*/React.createElement("path", {
+      fill: "#34A853",
+      d: "M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+    })), "Entrar com Google para acessar Salas"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 11,
+        color: t.muted
+      }
+    }, "Modo an\xF4nimo n\xE3o \xE9 aceito nas salas colaborativas."));
+  }
+
+  // ── Setup profile if name not set ──
   if (!user.name) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -7648,7 +7784,7 @@ function RoomsSection({
         fontSize: 14,
         marginBottom: 20
       }
-    }, "Para participar de salas, configure seu perfil primeiro."), /*#__PURE__*/React.createElement(UserSetupModal, {
+    }, "Configure seu perfil para participar das salas."), /*#__PURE__*/React.createElement(UserSetupModal, {
       user: user,
       authUser: authUser,
       onSave: u => {
@@ -7659,18 +7795,85 @@ function RoomsSection({
       t: t
     }));
   }
+
+  // ── Ensure public room is in list ──
+  const ensurePublicRoom = () => {
+    const pub = rooms.find(r => r.id === PUBLIC_ROOM_ID);
+    if (!pub) {
+      const publicRoom = {
+        id: PUBLIC_ROOM_ID,
+        name: "🌍 Verbarium — Sala Pública",
+        dictId: dicts[0]?.id || "",
+        createdBy: "system",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        isPublic: true,
+        members: [{
+          id: authUser.uid,
+          name: authUser.displayName,
+          avatar: authUser.photoURL || "🧙",
+          role: "contributor",
+          joinedAt: tsNow()
+        }],
+        missions: [],
+        pendingContributions: [],
+        settings: {
+          requireApproval: false,
+          defaultRole: "contributor"
+        },
+        description: "Sala aberta para todos os criadores de conlangs do Verbarium! Entre e converse."
+      };
+      const updated = [publicRoom, ...rooms];
+      setRooms(updated);
+      saveRooms(updated);
+      if (fbReady) fbBridge.syncRoom(publicRoom);
+      return publicRoom;
+    }
+    // Add current user if not member
+    if (pub && !pub.members?.find(m => m.id === authUser.uid)) {
+      const updated = rooms.map(r => r.id === PUBLIC_ROOM_ID ? {
+        ...r,
+        members: [...(r.members || []), {
+          id: authUser.uid,
+          name: authUser.displayName,
+          avatar: authUser.photoURL || "🧙",
+          role: "contributor",
+          joinedAt: tsNow()
+        }]
+      } : r);
+      setRooms(updated);
+      saveRooms(updated);
+      if (fbReady) fbBridge.syncRoom(updated.find(r => r.id === PUBLIC_ROOM_ID));
+    }
+    return pub;
+  };
+
+  // Auto-join public room and show it when user first opens Salas
+  useEffect(() => {
+    ensurePublicRoom();
+    // Auto-open if only one room
+    const myRooms = rooms.filter(r => r.members?.find(m => m.id === authUser.uid));
+    if (myRooms.length === 1 && view === "list" && !activeRoom) {
+      setActiveRoom(myRooms[0].id);
+      setView("room");
+    }
+  }, [authUser.uid]);
   const createRoom = () => {
     if (!creating.name.trim()) return;
+    // Admin password check
+    if (adminPass !== ADMIN_PASSWORD) {
+      notify("Senha de administrador incorreta.", "err");
+      return;
+    }
     const room = {
       id: genId(8),
       name: creating.name.trim(),
       dictId: creating.dictId,
-      createdBy: user.id,
+      createdBy: authUser.uid,
       createdAt: tsNow(),
       members: [{
-        id: user.id,
-        name: user.name,
-        avatar: user.avatar,
+        id: authUser.uid,
+        name: authUser.displayName || user.name,
+        avatar: authUser.photoURL || user.avatar,
         role: "creator",
         joinedAt: tsNow()
       }],
@@ -7688,7 +7891,9 @@ function RoomsSection({
     if (fbReady) fbBridge.syncRoom(room);
     setActiveRoom(room.id);
     setView("room");
-    notify(`Sala "${room.name}" criada! Compartilhe o ID: ${room.id} 🎉`);
+    setAdminPass("");
+    setShowAdminPass(false);
+    notify(`Sala "${room.name}" criada! ID: ${room.id} 🎉`);
   };
   const joinRoom = async () => {
     const id = joinId.trim();
@@ -7953,6 +8158,47 @@ function RoomsSection({
     key: d.id,
     value: d.id
   }, d.name)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      fontFamily: t.fD,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      display: "block",
+      marginBottom: 5
+    }
+  }, "\uD83D\uDD11 Senha de Administrador *"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: showAdminPass ? "text" : "password",
+    style: {
+      ...inp,
+      flex: 1,
+      letterSpacing: showAdminPass ? "0" : "3px"
+    },
+    value: adminPass,
+    onChange: e => setAdminPass(e.target.value),
+    placeholder: "Necess\xE1ria para criar salas"
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowAdminPass(s => !s),
+    style: {
+      padding: "8px 12px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12
+    }
+  }, showAdminPass ? "🙈" : "👁️"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -11413,7 +11659,25 @@ function AutoLessonPanel({
     setTimeout(() => {
       const newLessons = generateAutoLessons(dict, lessons);
       if (!newLessons.length) {
-        notify("Nenhuma lição nova para gerar. Adicione mais palavras ou as lições já existem.", "info");
+        if (!lessons.length && entries.length >= 3) {
+          // Force create first lesson with available words
+          const first = {
+            id: Date.now(),
+            autoId: "auto_first",
+            title: "Lição 1 — Primeiras Palavras de " + (dict?.name || "sua conlang"),
+            description: "Introdução ao vocabulário básico da língua.",
+            entryIds: entries.slice(0, Math.min(8, entries.length)).map(e => e.id),
+            content: "Bem-vindo à sua primeira lição!\n\nEsta lição foi criada automaticamente com base no vocabulário atual.\n\n" + entries.slice(0, 8).map(function (e) {
+              return "• " + e.word + " = " + e.translation;
+            }).join("\n"),
+            level: 1,
+            autoGenerated: true,
+            created: new Date().toISOString().split("T")[0]
+          };
+          setPreview([first]);
+        } else {
+          notify("Nenhuma lição nova para gerar. As lições baseadas no vocabulário atual já existem.", "info");
+        }
       } else {
         setPreview(newLessons);
       }
@@ -11435,6 +11699,27 @@ function AutoLessonPanel({
     5: "#a855f7"
   };
   const lc = levelColors[level.level] || t.accent;
+
+  // Suggested titles based on gaps in existing lessons
+  const suggestedTitles = (() => {
+    if (!entries.length) return [];
+    const existT = new Set(lessons.map(l => l.title.toLowerCase()));
+    const suggs = [];
+    const tags = [...new Set(entries.flatMap(e => e.tags || []))];
+    const hasCls = cls => entries.some(e => e.class === cls);
+    const lacksLesson = kw => ![...existT].some(t => t.includes(kw));
+    if (hasCls("verbo") && lacksLesson("verbo")) suggs.push("⚡ Verbos de Ação");
+    if (hasCls("adjetivo") && lacksLesson("adjetiv")) suggs.push("🎨 Adjetivos Essenciais");
+    if (entries.length > 15 && lacksLesson("revisão")) suggs.push("🔄 Revisão Geral");
+    if (tags.includes("natureza") && lacksLesson("natureza")) suggs.push("🌿 Vocabulário: Natureza");
+    if (tags.includes("emoções") && lacksLesson("emoç")) suggs.push("💭 Emoções e Sentimentos");
+    if (tags.includes("família") && lacksLesson("família")) suggs.push("👨‍👩‍👧 Vocabulário: Família");
+    if (tags.includes("cores") && lacksLesson("cor")) suggs.push("🌈 As Cores na Língua");
+    if (entries.length > 30 && lacksLesson("avançado")) suggs.push("🎓 Vocabulário Avançado");
+    if ((dict?.phonology?.usedVowels || []).length > 3 && lacksLesson("fonolog")) suggs.push("🔤 Sistema Fonológico");
+    if ((dict?.grammar?.morphology || "").length > 50 && lacksLesson("gramát")) suggs.push("📐 Gramática Fundamental");
+    return suggs.slice(0, 6);
+  })();
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: `${lc}10`,
@@ -11443,7 +11728,37 @@ function AutoLessonPanel({
       padding: 18,
       marginBottom: 20
     }
+  }, suggestedTitles.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14,
+      paddingBottom: 14,
+      borderBottom: `1px solid ${lc}20`
+    }
   }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: lc,
+      fontFamily: t.fD,
+      letterSpacing: 1,
+      marginBottom: 8
+    }
+  }, "\uD83D\uDCA1 SUGEST\xD5ES PARA PR\xD3XIMAS LI\xC7\xD5ES"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6
+    }
+  }, suggestedTitles.map((s, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      fontSize: 12,
+      background: `${lc}15`,
+      color: lc,
+      padding: "4px 12px",
+      borderRadius: 20,
+      border: `1px solid ${lc}30`
+    }
+  }, s)))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "flex-start",
