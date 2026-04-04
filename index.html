@@ -5139,9 +5139,29 @@ function ImportPanel({
     style: {
       color: t.accent
     }
-  }, "Palavra | Tradu\xE7\xE3o | Classe | Pron\xFAncia | Etimologia | Defini\xE7\xE3o | Tags | Notas")), React.createElement(() => {
-    const exRef = React.useRef();
-    const handleExcel = e => {
+  }, "Palavra | Tradu\xE7\xE3o | Classe | Pron\xFAncia | Etimologia | Defini\xE7\xE3o | Tags | Notas")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => document.getElementById('vb-excel-input').click(),
+    style: {
+      padding: '9px 18px',
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 9,
+      cursor: 'pointer',
+      fontFamily: t.fB,
+      fontSize: 13,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
+    }
+  }, "\uD83D\uDCC2 Escolher Excel / CSV"), /*#__PURE__*/React.createElement("input", {
+    id: "vb-excel-input",
+    type: "file",
+    accept: ".xlsx,.xls,.csv",
+    style: {
+      display: 'none'
+    },
+    onChange: e => {
       const file = e.target.files[0];
       if (!file) return;
       const r = new FileReader();
@@ -5155,11 +5175,10 @@ function ImportPanel({
             header: 1
           });
           const today = new Date().toISOString().split('T')[0];
-          // Auto-detect header row
           let dataStart = 0;
           const firstRow = (rows[0] || []).map(c => String(c || '').toLowerCase());
-          if (firstRow.some(c => ['word', 'palavra', 'word', 'term'].includes(c))) dataStart = 1;
-          const es = rows.slice(dataStart).filter(r => r[0]).map((r, i) => ({
+          if (firstRow.some(c => ['word', 'palavra', 'term', 'mot', 'wort'].includes(c))) dataStart = 1;
+          const es = rows.slice(dataStart).filter(r => r && r[0]).map((r, i) => ({
             id: Date.now() + i,
             word: String(r[0] || '').trim(),
             translation: String(r[1] || '').trim(),
@@ -5167,48 +5186,24 @@ function ImportPanel({
             pronunciation: String(r[3] || '').trim(),
             etymology: String(r[4] || '').trim(),
             definition: String(r[5] || '').trim(),
-            tags: String(r[6] || '').split(/[,;]/).map(t => t.trim()).filter(Boolean),
+            tags: String(r[6] || '').split(/[,;]/).map(x => x.trim()).filter(Boolean),
             notes: String(r[7] || '').trim(),
             examples: r[8] ? [String(r[8]).trim()] : [],
             roots: [],
             audio: null,
             image: null,
             created: today
-          }));
+          })).filter(e => e.word && e.translation);
           setPreview(es);
           notify(`${es.length} palavras detectadas do Excel!`);
         } catch (err) {
-          notify('Erro ao ler arquivo: ' + err.message, 'err');
+          notify('Erro: ' + err.message, 'err');
         }
       };
       r.readAsBinaryString(file);
       e.target.value = '';
-    };
-    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
-      onClick: () => exRef.current?.click(),
-      style: {
-        padding: '9px 18px',
-        background: t.surf,
-        color: t.accent,
-        border: `1px solid ${t.cb}`,
-        borderRadius: 9,
-        cursor: 'pointer',
-        fontFamily: t.fB,
-        fontSize: 13,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6
-      }
-    }, "\uD83D\uDCC2 Escolher Excel / CSV"), /*#__PURE__*/React.createElement("input", {
-      ref: exRef,
-      type: "file",
-      accept: ".xlsx,.xls,.csv",
-      style: {
-        display: 'none'
-      },
-      onChange: handleExcel
-    }));
-  }, null)), mode === 'url' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+    }
+  })), mode === 'url' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
     style: lbl
   }, "URL do arquivo (JSON, CSV ou Google Sheets p\xFAblico)"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -8131,20 +8126,22 @@ function FirebaseSettingsBlock({
     }
   }, "\uD83D\uDD25 Salvar e Ativar Firebase"), isActive && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      // Generate standalone HTML with config embedded
-      const configJs = `\n// ── FIREBASE CONFIG (embedded) ──\nvar EMBEDDED_FB_CONFIG=${JSON.stringify(cfg)};\n`;
-      fetch(window.location.href).then(r => r.text()).then(html => {
-        const patched = html.replace('// ── SPLASH ANIMATION', configJs + '// ── SPLASH ANIMATION');
-        const blob = new Blob([patched], {
-          type: 'text/html'
+      var cfgStr = JSON.stringify(cfg);
+      var script = "var EMBEDDED_FB_CONFIG=" + cfgStr + ";";
+      fetch(window.location.href).then(function (r) {
+        return r.text();
+      }).then(function (html) {
+        var patched = html.replace("(function(){", script + "(function(){");
+        var blob = new Blob([patched], {
+          type: "text/html"
         });
-        const a = document.createElement('a');
+        var a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = 'verbarium-configurado.html';
+        a.download = "verbarium-configurado.html";
         a.click();
-      }).catch(() => {
-        // Fallback: inject via localStorage note
-        alert('Para embutir o config: copie o arquivo verbarium.html e adicione antes do IIFE:\nvar EMBEDDED_FB_CONFIG=' + JSON.stringify(cfg) + ';');
+      }).catch(function () {
+        var msg = "Adicione esta linha no inicio do script HTML:\n" + script;
+        alert(msg);
       });
     },
     style: {
@@ -9514,52 +9511,74 @@ function DriveSyncPanel({
   t,
   notify
 }) {
-  const [syncing, setSyncing] = React.useState(false);
-  const [lastSync, setLastSync] = React.useState(() => localStorage.getItem("vb_last_sync") || null);
-  const [hasBackup, setHasBackup] = React.useState(false);
-  React.useEffect(() => {
-    if (authUser) checkBackup();
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState(() => {
+    try {
+      return localStorage.getItem("vb_last_sync");
+    } catch {
+      return null;
+    }
+  });
+  const [hasBackup, setHasBackup] = useState(false);
+  useEffect(() => {
+    if (authUser && window.firebase?.firestore) {
+      firebase.firestore().collection("users").doc(authUser.uid).get().then(snap => setHasBackup(!!snap.data()?.backup_ts)).catch(() => {});
+    }
   }, [authUser]);
-  const checkBackup = async () => {
-    loadFirebaseStorage(async () => {
-      const bk = await downloadBackupFromStorage(authUser.uid);
-      setHasBackup(!!bk);
-    });
-  };
   const doBackup = () => {
     if (!authUser) {
       notify("Faça login para usar o backup na nuvem.", "err");
       return;
     }
-    setSyncing(true);
-    loadFirebaseStorage(async () => {
-      const ok = await uploadBackupToStorage(authUser.uid, dicts, study);
-      if (ok) {
-        const ts = new Date().toLocaleString("pt-BR");
-        localStorage.setItem("vb_last_sync", ts);
-        setLastSync(ts);
-        notify("✅ Backup salvo na nuvem Firebase!");
-        setHasBackup(true);
-      } else notify("Erro ao salvar backup. Verifique se Firebase Storage está ativado.", "err");
-      setSyncing(false);
-    });
-  };
-  const doRestore = () => {
-    if (!authUser) {
-      notify("Faça login para restaurar backup.", "err");
+    if (!window.firebase?.firestore) {
+      notify("Firebase não conectado.", "err");
       return;
     }
     setSyncing(true);
-    loadFirebaseStorage(async () => {
-      const bk = await downloadBackupFromStorage(authUser.uid);
-      if (bk) {
-        onRestored(bk);
-        notify("✅ Dados restaurados do backup na nuvem!");
-      } else notify("Nenhum backup encontrado na nuvem.", "info");
+    try {
+      const data = {
+        dicts: dicts.map(d => ({
+          ...d,
+          entries: d.entries.map(e => ({
+            ...e,
+            audio: null
+          }))
+        })),
+        study,
+        backup_ts: new Date().toISOString()
+      };
+      firebase.firestore().collection("users").doc(authUser.uid).set(data, {
+        merge: true
+      }).then(() => {
+        const ts = new Date().toLocaleString("pt-BR");
+        localStorage.setItem("vb_last_sync", ts);
+        setLastSync(ts);
+        setHasBackup(true);
+        notify("✅ Backup salvo na nuvem!");
+      }).catch(e => notify("Erro: " + e.message, "err")).finally(() => setSyncing(false));
+    } catch (e) {
+      notify("Erro: " + e.message, "err");
       setSyncing(false);
-    });
+    }
   };
-  const bs = {
+  const doRestore = () => {
+    if (!authUser) {
+      notify("Faça login para restaurar.", "err");
+      return;
+    }
+    if (!window.firebase?.firestore) {
+      notify("Firebase não conectado.", "err");
+      return;
+    }
+    setSyncing(true);
+    firebase.firestore().collection("users").doc(authUser.uid).get().then(snap => {
+      if (snap.exists) {
+        onRestored(snap.data());
+        notify("✅ Dados restaurados!");
+      } else notify("Nenhum backup encontrado.", "info");
+    }).catch(e => notify("Erro: " + e.message, "err")).finally(() => setSyncing(false));
+  };
+  const bsBtn = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
@@ -9592,7 +9611,7 @@ function DriveSyncPanel({
       alignItems: "center",
       gap: 8
     }
-  }, "\u2601\uFE0F BACKUP NA NUVEM (Firebase Storage)", authUser && /*#__PURE__*/React.createElement("span", {
+  }, "\u2601\uFE0F BACKUP NA NUVEM (Firestore)", authUser && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       background: "rgba(34,197,94,0.15)",
@@ -9606,20 +9625,20 @@ function DriveSyncPanel({
       color: t.muted,
       lineHeight: 1.6
     }
-  }, "Fa\xE7a login com Google para ativar o backup autom\xE1tico dos seus dicion\xE1rios na nuvem Firebase. Os \xE1udios gravados ficam no dispositivo por limita\xE7\xE3o de tamanho.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+  }, "Fa\xE7a login com Google para ativar o backup autom\xE1tico dos seus dicion\xE1rios na nuvem. Os \xE1udios gravados ficam no dispositivo por limita\xE7\xE3o de tamanho.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 13,
       color: t.muted,
       lineHeight: 1.6,
       marginBottom: 12
     }
-  }, "Seus dicion\xE1rios e progresso s\xE3o salvos no Firebase Storage. Acesse de qualquer dispositivo fazendo login com a mesma conta Google.", /*#__PURE__*/React.createElement("br", null), lastSync && /*#__PURE__*/React.createElement("span", {
+  }, "Dicion\xE1rios e progresso salvos no Firebase Firestore. Acesse de qualquer dispositivo com a mesma conta Google.", lastSync && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
     style: {
       color: "#22c55e"
     }
-  }, "\u2713 \xDAltimo backup: ", lastSync)), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
+  }, "\u2713 \xDAltimo backup: ", lastSync))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("button", {
     style: {
-      ...bs,
+      ...bsBtn,
       background: t.accent,
       color: t.light ? "#fff" : "#000"
     },
@@ -9627,7 +9646,7 @@ function DriveSyncPanel({
     disabled: syncing
   }, syncing ? "⏳ Salvando..." : "☁️ Salvar Backup Agora"), hasBackup && /*#__PURE__*/React.createElement("button", {
     style: {
-      ...bs,
+      ...bsBtn,
       background: t.surf,
       color: t.accent,
       border: `1px solid ${t.cb}`
@@ -10082,6 +10101,858 @@ function AvatarPicker({
     }
   }, "Salvar Avatar"));
 }
+
+// ── DELETE CONFIRM MODAL ──────────────────────────────────────────────────────
+function ConfirmModal({
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  danger,
+  t
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.65)",
+      backdropFilter: "blur(6px)",
+      zIndex: 400,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+      animation: "fadeIn 0.15s"
+    },
+    onClick: onCancel
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.light ? "#faf4e8" : "#13111e",
+      border: `1px solid ${t.cb}`,
+      borderRadius: 18,
+      padding: 28,
+      maxWidth: 400,
+      width: "100%",
+      animation: "slideUp 0.2s",
+      boxShadow: `0 20px 60px rgba(0,0,0,0.5)`
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 18,
+      color: danger ? "#ef4444" : t.accent,
+      marginBottom: 10
+    }
+  }, title), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      color: t.muted,
+      lineHeight: 1.7,
+      marginBottom: 24
+    }
+  }, message), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onConfirm,
+    style: {
+      flex: 1,
+      padding: "10px",
+      background: danger ? "rgba(239,68,68,0.9)" : "rgba(34,197,94,0.9)",
+      color: "#fff",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, danger ? "Sim, excluir" : "Confirmar"), /*#__PURE__*/React.createElement("button", {
+    onClick: onCancel,
+    style: {
+      flex: 1,
+      padding: "10px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "Cancelar"))));
+}
+// ── STUDY REMINDER WIDGET ─────────────────────────────────────────────────────
+function StudyReminderWidget({
+  t,
+  notify
+}) {
+  const [enabled, setEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("vb_reminder") === "on";
+    } catch {
+      return false;
+    }
+  });
+  const toggle = async () => {
+    if (!enabled) {
+      if (!("Notification" in window)) {
+        notify("Navegador não suporta notificações.", "info");
+        return;
+      }
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        setEnabled(true);
+        try {
+          localStorage.setItem("vb_reminder", "on");
+        } catch {}
+        notify("✅ Lembretes ativados!");
+        new Notification("Verbarium PRO", {
+          body: "Lembretes de estudo ativados! 🧠"
+        });
+      } else notify("Permissão negada.", "info");
+    } else {
+      setEnabled(false);
+      try {
+        localStorage.setItem("vb_reminder", "off");
+      } catch {}
+      notify("Lembretes desativados.", "info");
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 12,
+      padding: "12px 16px",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.text
+    }
+  }, "\uD83D\uDD14 Lembrete de Estudo"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 2
+    }
+  }, enabled ? "Notificações ativas" : "Ative para lembretes diários")), /*#__PURE__*/React.createElement("button", {
+    onClick: toggle,
+    style: {
+      width: 48,
+      height: 26,
+      borderRadius: 99,
+      border: "none",
+      cursor: "pointer",
+      background: enabled ? t.accent : t.surf,
+      position: "relative",
+      transition: "all 0.2s",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 3,
+      width: 20,
+      height: 20,
+      borderRadius: "50%",
+      background: enabled ? t.light ? "#fff" : "#000" : "#666",
+      transition: "all 0.2s",
+      left: enabled ? "24px" : "3px"
+    }
+  })));
+}
+
+// ── QUICK STATS WIDGET ────────────────────────────────────────────────────────
+function QuickStatsWidget({
+  dict,
+  study,
+  t
+}) {
+  const entries = dict?.entries || [];
+  if (!entries.length) return null;
+  const cc = {};
+  entries.forEach(e => {
+    cc[e.class] = (cc[e.class] || 0) + 1;
+  });
+  const top3 = Object.entries(cc).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const withAudio = entries.filter(e => e.audio).length;
+  const withImage = entries.filter(e => e.image).length;
+  const srsReady = entries.filter(e => {
+    const s = null;
+    return !s || isDue(s.due);
+  }).length;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDCCA ESTAT\xCDSTICAS \u2014 ", dict.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 1fr",
+      gap: 7,
+      marginBottom: 10
+    }
+  }, [["🔊", withAudio, "com áudio"], ["🖼️", withImage, "com imagem"], ["🧠", srsReady, "p/ revisar"]].map(([ic, v, lb]) => /*#__PURE__*/React.createElement("div", {
+    key: lb,
+    style: {
+      background: t.surf,
+      borderRadius: 9,
+      padding: "8px 4px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15
+    }
+  }, ic), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 16,
+      color: t.accent,
+      lineHeight: 1
+    }
+  }, v), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 9,
+      color: t.muted,
+      marginTop: 1
+    }
+  }, lb)))), top3.length > 0 && top3.map(([cls, cnt]) => /*#__PURE__*/React.createElement("div", {
+    key: cls,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: t.muted,
+      width: 88,
+      flexShrink: 0,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, cls), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      background: t.surf,
+      borderRadius: 99,
+      height: 4,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${Math.round(cnt / entries.length * 100)}%`,
+      height: "100%",
+      background: t.accent,
+      borderRadius: 99
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: t.accent,
+      width: 20,
+      textAlign: "right"
+    }
+  }, cnt))));
+}
+
+// ── LANGUAGE CARD ────────────────────────────────────────────────────────────
+function LangCard({
+  dict,
+  isActive,
+  onSelect,
+  onDelete,
+  study,
+  t
+}) {
+  const [confirmDel, setConfirmDel] = useState(false);
+  const entries = dict.entries || [];
+  const phrases = dict.phrases || [];
+  const lessons = dict.lessons || [];
+  const tags = [...new Set(entries.flatMap(e => e.tags || []))];
+  const memScores = study?.memScores || {};
+  const withMem = entries.filter(e => memScores[e.id]);
+  const avgMem = withMem.length > 0 ? Math.round(withMem.reduce((a, e) => {
+    const m = memScores[e.id];
+    return a + (m.c || 0) / Math.max((m.c || 0) + (m.w || 0), 1);
+  }, 0) / withMem.length * 100) : 0;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `2px solid ${isActive ? t.accent : t.cb}`,
+      borderRadius: 18,
+      overflow: "hidden",
+      transition: "all 0.2s",
+      position: "relative",
+      boxShadow: isActive ? `0 0 24px ${t.ag}` : ""
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 5,
+      background: `linear-gradient(90deg,${t.accent},${t.accent}55)`
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 16,
+      cursor: "pointer"
+    },
+    onClick: () => !confirmDel && onSelect(dict.id)
+  }, isActive && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      fontSize: 9,
+      fontFamily: t.fD,
+      letterSpacing: 1,
+      padding: "2px 8px",
+      borderRadius: 20
+    }
+  }, "ATIVA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 18,
+      color: isActive ? t.accent : t.text,
+      marginBottom: 3,
+      paddingRight: 50
+    }
+  }, dict.name), dict.description && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      marginBottom: 10,
+      lineHeight: 1.4,
+      display: "-webkit-box",
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: "vertical",
+      overflow: "hidden"
+    }
+  }, dict.description), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12,
+      flexWrap: "wrap",
+      marginBottom: 10
+    }
+  }, [["📖", entries.length, "palavras"], ["💬", phrases.length, "frases"], ["📚", lessons.length, "lições"]].map(([ic, v, lb]) => /*#__PURE__*/React.createElement("div", {
+    key: lb,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", null, ic), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: t.accent,
+      fontFamily: t.fD
+    }
+  }, v), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: t.muted
+    }
+  }, lb)))), withMem.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontSize: 10,
+      color: t.muted,
+      marginBottom: 3
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Memoriza\xE7\xE3o"), /*#__PURE__*/React.createElement("span", null, avgMem, "%")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.surf,
+      borderRadius: 99,
+      height: 4,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${avgMem}%`,
+      height: "100%",
+      background: avgMem > 70 ? "#22c55e" : avgMem > 40 ? "#f59e0b" : t.accent,
+      borderRadius: 99
+    }
+  }))), tags.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 4,
+      marginBottom: 10
+    }
+  }, tags.slice(0, 4).map(tag => /*#__PURE__*/React.createElement("span", {
+    key: tag,
+    style: {
+      fontSize: 9,
+      background: t.tag,
+      color: t.tagT,
+      padding: "1px 7px",
+      borderRadius: 20
+    }
+  }, tag)), tags.length > 4 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      color: t.muted
+    }
+  }, "+", tags.length - 4)), dict.author && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: t.muted
+    }
+  }, "\u270D\uFE0F ", dict.author)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 16px 14px",
+      display: "flex",
+      gap: 6
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSelect(dict.id),
+    style: {
+      flex: 1,
+      padding: "7px",
+      background: isActive ? t.ag : t.surf,
+      color: isActive ? t.accent : t.muted,
+      border: `1px solid ${isActive ? t.accent : t.cb}`,
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fD,
+      fontSize: 11
+    }
+  }, isActive ? "✓ Selecionada" : "Selecionar"), !confirmDel ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmDel(true),
+    style: {
+      padding: "7px 12px",
+      background: "rgba(239,68,68,0.08)",
+      color: "#ef4444",
+      border: "1px solid rgba(239,68,68,0.2)",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontSize: 14
+    },
+    title: "Excluir"
+  }, "\uD83D\uDDD1\uFE0F") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: "#ef4444",
+      flex: 1
+    }
+  }, "Excluir?"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onDelete(dict.id);
+      setConfirmDel(false);
+    },
+    style: {
+      padding: "5px 10px",
+      background: "#ef4444",
+      color: "#fff",
+      border: "none",
+      borderRadius: 7,
+      cursor: "pointer",
+      fontSize: 11,
+      fontWeight: 600
+    }
+  }, "Sim"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmDel(false),
+    style: {
+      padding: "5px 10px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 7,
+      cursor: "pointer",
+      fontSize: 11
+    }
+  }, "N\xE3o"))));
+}
+
+// ── WORD OF THE DAY ───────────────────────────────────────────────────────────
+function WordOfDay({
+  entries,
+  t
+}) {
+  if (!entries || !entries.length) return null;
+  const seed = new Date().toDateString();
+  const idx = seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % entries.length;
+  const word = entries[idx];
+  if (!word) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 8
+    }
+  }, "\u2728 PALAVRA DO DIA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent,
+      marginBottom: 2
+    }
+  }, word.word), word.pronunciation && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      fontStyle: "italic",
+      marginBottom: 4
+    }
+  }, word.pronunciation), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.text,
+      marginBottom: 6
+    }
+  }, word.translation), word.definition && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      lineHeight: 1.5,
+      display: "-webkit-box",
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: "vertical",
+      overflow: "hidden"
+    }
+  }, word.definition), word.audio && /*#__PURE__*/React.createElement("button", {
+    onClick: () => new Audio(word.audio).play(),
+    style: {
+      marginTop: 8,
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "4px 12px",
+      background: t.surf,
+      color: t.accent,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 11
+    }
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "play",
+    sz: 12
+  }), "Ouvir"), (word.tags || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4,
+      marginTop: 8,
+      flexWrap: "wrap"
+    }
+  }, (word.tags || []).map(tag => /*#__PURE__*/React.createElement("span", {
+    key: tag,
+    className: "tag"
+  }, tag))));
+}
+
+// ── MEMORIZATION STATS ────────────────────────────────────────────────────────
+function MemStats({
+  entries,
+  memScores,
+  t
+}) {
+  if (!entries || !entries.length) return null;
+  const withData = entries.filter(e => memScores[e.id]);
+  if (withData.length === 0) return null;
+  const known = withData.filter(e => {
+    const m = memScores[e.id];
+    return m.c / Math.max(m.c + m.w, 1) >= 0.8;
+  }).length;
+  const learning = withData.filter(e => {
+    const m = memScores[e.id];
+    const r = m.c / Math.max(m.c + m.w, 1);
+    return r >= 0.4 && r < 0.8;
+  }).length;
+  const hard = withData.filter(e => {
+    const m = memScores[e.id];
+    return m.c / Math.max(m.c + m.w, 1) < 0.4;
+  }).length;
+  const untouched = entries.length - withData.length;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 12
+    }
+  }, "\uD83E\uDDE0 MEMORIZA\xC7\xC3O"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 7,
+      marginBottom: 12
+    }
+  }, [["#22c55e", "✅", known, "Dominadas"], ["#f59e0b", "🔄", learning, "Aprendendo"], ["#ef4444", "❌", hard, "Difíceis"], [t.muted, "⬜", untouched, "Não estudadas"]].map(([color, ic, v, lb]) => /*#__PURE__*/React.createElement("div", {
+    key: lb,
+    style: {
+      background: t.surf,
+      borderRadius: 9,
+      padding: "8px 10px",
+      display: "flex",
+      alignItems: "center",
+      gap: 7
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16
+    }
+  }, ic), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 16,
+      color
+    }
+  }, v), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: t.muted
+    }
+  }, lb))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      height: 6,
+      borderRadius: 99,
+      overflow: "hidden",
+      gap: 1
+    }
+  }, [["#22c55e", known], ["#f59e0b", learning], ["#ef4444", hard], [t.surf, untouched]].map(([color, v], i) => v > 0 && /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      flex: v,
+      background: color
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontSize: 10,
+      color: t.muted,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", null, Math.round(known / entries.length * 100), "% dominado"), /*#__PURE__*/React.createElement("span", null, entries.length, " total")));
+}
+
+// ── TIMELINE PAGE ─────────────────────────────────────────────────────────────
+function TimelinePage({
+  dict,
+  t
+}) {
+  const entries = [...(dict?.entries || [])].sort((a, b) => new Date(a.created) - new Date(b.created));
+  const byMonth = {};
+  entries.forEach(e => {
+    const m = e.created?.slice(0, 7) || "?";
+    if (!byMonth[m]) byMonth[m] = [];
+    byMonth[m].push(e);
+  });
+  const months = Object.keys(byMonth).sort();
+  if (!entries.length) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 60,
+      color: t.muted
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 48,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDCC5"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "Adicione palavras para ver a linha do tempo."));
+  const maxCount = Math.max(...months.map(m => byMonth[m].length));
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 20,
+      color: t.accent,
+      marginBottom: 4
+    }
+  }, "Linha do Tempo"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: t.muted,
+      fontSize: 13,
+      marginBottom: 20
+    }
+  }, dict?.name, " \u2014 ", entries.length, " palavras"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "CRESCIMENTO DO LEXICO"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-end",
+      gap: 3,
+      height: 60
+    }
+  }, months.map(m => {
+    const c = byMonth[m].length;
+    const h = Math.max(6, Math.round(c / maxCount * 54));
+    return /*#__PURE__*/React.createElement("div", {
+      key: m,
+      style: {
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 2
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: "100%",
+        height: h,
+        background: t.accent,
+        borderRadius: "3px 3px 0 0",
+        opacity: 0.85,
+        boxShadow: `0 0 6px ${t.ag}`
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 7,
+        color: t.muted
+      }
+    }, m.slice(5)));
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      paddingLeft: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 7,
+      top: 0,
+      bottom: 0,
+      width: 2,
+      background: t.cb,
+      borderRadius: 2
+    }
+  }), months.map(m => /*#__PURE__*/React.createElement("div", {
+    key: m,
+    style: {
+      position: "relative",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: -19,
+      top: 2,
+      width: 12,
+      height: 12,
+      borderRadius: "50%",
+      background: t.accent,
+      border: `2px solid ${t.light ? "#f5f0e8" : "#0a0a0f"}`,
+      boxShadow: `0 0 8px ${t.ag}`
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 12,
+      color: t.accent,
+      marginBottom: 6
+    }
+  }, new Date(m + "-01").toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric"
+  }), " · ", byMonth[m].length, " palavra", byMonth[m].length !== 1 ? "s" : ""), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 5
+    }
+  }, byMonth[m].map(e => /*#__PURE__*/React.createElement("div", {
+    key: e.id,
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 8,
+      padding: "5px 10px",
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent
+    }
+  }, e.word), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: t.muted,
+      fontSize: 10,
+      marginLeft: 5
+    }
+  }, e.translation))))))));
+}
+
 // SETTINGS SECTION --───────────────────────────────────────────────────────
 function LoginNotice({
   fbReady,
@@ -10139,7 +11010,12 @@ function SettSection({
   L,
   notify,
   customThemeCfg,
-  setCustomThemeCfg
+  setCustomThemeCfg,
+  fbReady,
+  authUser,
+  dicts,
+  study,
+  onRestored
 }) {
   const fRef = useRef();
   const xRef = useRef();
@@ -10468,7 +11344,32 @@ function SettSection({
     onRestored: onRestored,
     t: t,
     notify: notify
-  }), /*#__PURE__*/React.createElement(FirebaseSettingsBlock, {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.card,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 14,
+      padding: 20,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDD14 NOTIFICA\xC7\xD5ES"), /*#__PURE__*/React.createElement(StudyReminderWidget, {
+    t: t,
+    notify: notify
+  }), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      lineHeight: 1.6
+    }
+  }, "Ative para receber lembretes do navegador para estudar. Funciona mesmo com o app fechado (se instalado como PWA).")), /*#__PURE__*/React.createElement(FirebaseSettingsBlock, {
     t: t,
     notify: notify
   }));
@@ -10497,6 +11398,7 @@ function Verbarium() {
   const [drawer, setDrawer] = useState(false);
   const [notif, setNotif] = useState(null);
   const [importPanel, setImportPanel] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // dictId to delete
   const [localUser, setLocalUser] = useState(() => getLocalUser());
   const [fbReady, setFbReady] = useState(false);
   const [fbConfig, setFbConfig] = useState(() => ld("vb_fb_config", null));
@@ -10766,6 +11668,18 @@ function Verbarium() {
     setGame(null);
     setDrawer(false);
   };
+  // Expose addDict globally
+  useEffect(() => {
+    window.__addDict = nd => {
+      setDicts(ds => [...ds, nd]);
+      setActDict(nd.id);
+      setTab("dictionary");
+      notify(`"${nd.name}" criada! 🌍`);
+    };
+    return () => {
+      delete window.__addDict;
+    };
+  }, []);
   const handleAddToDict = (data, type, dictId) => {
     setDicts(ds => ds.map(d => {
       if (d.id !== dictId) return d;
@@ -10827,6 +11741,10 @@ function Verbarium() {
     id: "achievements",
     n: "trophy",
     lb: L.nav.ach
+  }, {
+    id: "timeline",
+    n: "book",
+    lb: "Timeline"
   }, {
     id: "about",
     n: "globe",
@@ -10932,26 +11850,52 @@ function Verbarium() {
   }, "Conlangs"), dicts.map(d => /*#__PURE__*/React.createElement("div", {
     key: d.id,
     className: `ni${actDict === d.id ? " a" : ""}`,
+    style: {
+      justifyContent: "space-between"
+    },
     onClick: () => {
       setActDict(d.id);
       navTo("dictionary");
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      flex: 1,
+      minWidth: 0
     }
   }, /*#__PURE__*/React.createElement(Ic, {
     n: "globe"
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       overflow: "hidden",
-      textOverflow: "ellipsis"
+      textOverflow: "ellipsis",
+      flex: 1
     }
   }, d.name), /*#__PURE__*/React.createElement("span", {
     style: {
-      marginLeft: "auto",
       fontSize: 9,
       background: t.surf,
       padding: "1px 5px",
-      borderRadius: 10
+      borderRadius: 10,
+      flexShrink: 0
     }
-  }, d.entries.length))), /*#__PURE__*/React.createElement("div", {
+  }, d.entries.length)), dicts.length > 1 && /*#__PURE__*/React.createElement("span", {
+    onClick: e => {
+      e.stopPropagation();
+      setConfirmDelete(d.id);
+    },
+    style: {
+      fontSize: 11,
+      color: "#ef4444",
+      marginLeft: 4,
+      cursor: "pointer",
+      flexShrink: 0,
+      opacity: 0.7
+    },
+    title: "Excluir"
+  }, "\u2715"))), /*#__PURE__*/React.createElement("div", {
     className: "ni",
     style: {
       color: t.accent
@@ -11197,7 +12141,16 @@ function Verbarium() {
       color: t.muted,
       marginTop: 2
     }
-  }, lb)))), dailyChallenge && /*#__PURE__*/React.createElement(DailyChallengeWidget, {
+  }, lb)))), /*#__PURE__*/React.createElement(LoginNotice, {
+    fbReady: fbReady,
+    authUser: authUser,
+    onLogin: () => setShowLogin(true),
+    t: t
+  }), /*#__PURE__*/React.createElement(QuickStatsWidget, {
+    dict: dict,
+    study: study,
+    t: t
+  }), dailyChallenge && /*#__PURE__*/React.createElement(DailyChallengeWidget, {
     challenge: dailyChallenge,
     progress: challengeProgress[dailyChallenge.id],
     t: t
@@ -11241,7 +12194,110 @@ function Verbarium() {
       color: t.muted,
       fontSize: 18
     }
-  }, "\u203A")), /*#__PURE__*/React.createElement("div", {
+  }, "\u203A")), (dict?.entries || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: screen.mobile ? "1fr" : "1fr 1fr",
+      gap: 14,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement(WordOfDay, {
+    entries: dict.entries,
+    t: t
+  }), /*#__PURE__*/React.createElement(MemStats, {
+    entries: dict.entries,
+    memScores: study?.memScores || {},
+    t: t
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 11,
+      letterSpacing: 1
+    }
+  }, "\uD83C\uDF0D MINHAS CONLANGS (", dicts.length, ")"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const nm = prompt("Nome da nova conlang:");
+      if (!nm) return;
+      const nd = {
+        id: nm.toLowerCase().replace(/\s+/g, "_") + "_" + Date.now(),
+        name: nm,
+        description: "",
+        author: "",
+        entries: [],
+        phrases: [],
+        lessons: [],
+        grammar: {
+          morphology: "",
+          syntax: "",
+          writingSystem: "",
+          custom: []
+        },
+        phonology: {
+          usedConsonants: [],
+          usedVowels: [],
+          toneSystem: "",
+          notes: ""
+        }
+      };
+      setDicts(ds => [...ds, nd]);
+      setActDict(nd.id);
+      setTab("dictionary");
+      notify(`"${nm}" criada! 🌍`);
+    },
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "6px 14px",
+      background: t.accent,
+      color: t.light ? "#fff" : "#000",
+      border: "none",
+      borderRadius: 9,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 12,
+      fontWeight: 600
+    }
+  }, /*#__PURE__*/React.createElement(Ic, {
+    n: "plus",
+    sz: 13
+  }), "Nova Conlang")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: `repeat(auto-fill,minmax(${screen.mobile ? "100%" : "260px"},1fr))`,
+      gap: 14,
+      marginBottom: 24
+    }
+  }, dicts.map(d => /*#__PURE__*/React.createElement(LangCard, {
+    key: d.id,
+    dict: d,
+    isActive: actDict === d.id,
+    study: study,
+    onSelect: id => {
+      setActDict(id);
+      setTab("dictionary");
+    },
+    onDelete: id => {
+      if (dicts.length <= 1) {
+        notify("Você precisa ter ao menos uma conlang.", "info");
+        return;
+      }
+      setDicts(ds => ds.filter(x => x.id !== id));
+      if (actDict === id) setActDict(dicts.find(x => x.id !== id)?.id || "");
+      notify("Conlang excluída.", "info");
+    },
+    t: t
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: t.fD,
       color: t.accent,
@@ -11249,7 +12305,178 @@ function Verbarium() {
       letterSpacing: 1,
       marginBottom: 10
     }
-  }, "\uD83D\uDCD6 \xDALTIMAS ENTRADAS"), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83C\uDF0D MINHAS CONLANGS"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))",
+      gap: 12,
+      marginBottom: 24
+    }
+  }, dicts.map(d => {
+    const isAct = actDict === d.id;
+    return /*#__PURE__*/React.createElement("div", {
+      key: d.id,
+      style: {
+        background: isAct ? t.ag : t.card,
+        border: `2px solid ${isAct ? t.accent : t.cb}`,
+        borderRadius: 16,
+        padding: 16,
+        cursor: "pointer",
+        transition: "all 0.2s",
+        position: "relative"
+      },
+      onClick: () => {
+        setActDict(d.id);
+        setTab("dictionary");
+      },
+      onMouseEnter: e => {
+        if (!isAct) {
+          e.currentTarget.style.borderColor = t.accent;
+          e.currentTarget.style.transform = "translateY(-2px)";
+        }
+      },
+      onMouseLeave: e => {
+        if (!isAct) {
+          e.currentTarget.style.borderColor = t.cb;
+          e.currentTarget.style.transform = "";
+        }
+      }
+    }, isAct && /*#__PURE__*/React.createElement("span", {
+      style: {
+        position: "absolute",
+        top: 8,
+        right: 8,
+        fontSize: 9,
+        background: t.accent,
+        color: t.light ? "#fff" : "#000",
+        padding: "2px 7px",
+        borderRadius: 20,
+        fontFamily: t.fD
+      }
+    }, "ativa"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: t.fD,
+        fontSize: 16,
+        color: isAct ? t.accent : t.text,
+        marginBottom: 2
+      }
+    }, d.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: t.muted,
+        marginBottom: 8,
+        lineHeight: 1.4
+      }
+    }, d.description || "Sem descrição"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: t.muted
+      }
+    }, "\uD83D\uDCD6 ", (d.entries || []).length), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: t.muted
+      }
+    }, "\uD83D\uDCAC ", (d.phrases || []).length), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: t.muted
+      }
+    }, "\uD83D\uDCDA ", (d.lessons || []).length)), dicts.length > 1 && /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        setConfirmDelete(d.id);
+      },
+      style: {
+        fontSize: 10,
+        color: "#ef4444",
+        background: "rgba(239,68,68,0.08)",
+        border: "1px solid rgba(239,68,68,0.2)",
+        padding: "3px 9px",
+        borderRadius: 6,
+        cursor: "pointer",
+        fontFamily: t.fB
+      }
+    }, "\uD83D\uDDD1\uFE0F Excluir"));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "transparent",
+      border: `2px dashed ${t.cb}`,
+      borderRadius: 16,
+      padding: 16,
+      cursor: "pointer",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      minHeight: 90,
+      transition: "all 0.18s"
+    },
+    onClick: () => {
+      const nm = prompt("Nome da nova conlang:");
+      if (!nm) return;
+      const nd = {
+        id: nm.toLowerCase().replace(/\s+/g, "_") + "_" + Date.now(),
+        name: nm,
+        description: "",
+        author: "",
+        entries: [],
+        phrases: [],
+        lessons: [],
+        grammar: {
+          morphology: "",
+          syntax: "",
+          writingSystem: "",
+          custom: []
+        },
+        phonology: {
+          usedConsonants: [],
+          usedVowels: [],
+          toneSystem: "",
+          notes: ""
+        }
+      };
+      setDicts(ds => [...ds, nd]);
+      setActDict(nd.id);
+      setTab("dictionary");
+      notify(nd.name + " criada! 🌍");
+    },
+    onMouseEnter: e => {
+      e.currentTarget.style.borderColor = t.accent;
+      e.currentTarget.style.background = t.ag;
+    },
+    onMouseLeave: e => {
+      e.currentTarget.style.borderColor = t.cb;
+      e.currentTarget.style.background = "transparent";
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 24,
+      color: t.muted
+    }
+  }, "+"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: t.muted,
+      fontFamily: t.fD
+    }
+  }, "Nova Conlang"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      color: t.accent,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginBottom: 10
+    }
+  }, "\uD83D\uDCD6 \xDALTIMAS ENTRADAS \u2014 ", dict?.name), /*#__PURE__*/React.createElement("div", {
     className: "grid"
   }, [...allE].reverse().slice(0, 3).map(e => /*#__PURE__*/React.createElement("div", {
     key: e.id,
@@ -12026,6 +13253,9 @@ function Verbarium() {
     t: t,
     notify: notify,
     fbReady: fbReady
+  }), tab === "timeline" && /*#__PURE__*/React.createElement(TimelinePage, {
+    dict: dict,
+    t: t
   }), tab === "about" && /*#__PURE__*/React.createElement(AboutPage, {
     t: t
   }), tab === "settings" && /*#__PURE__*/React.createElement(SettSection, {
@@ -12419,7 +13649,104 @@ function Verbarium() {
     },
     t: t,
     L: L
-  })), notif && /*#__PURE__*/React.createElement("div", {
+  })), confirmDelete && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.7)",
+      backdropFilter: "blur(8px)",
+      zIndex: 400,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20
+    },
+    onClick: () => setConfirmDelete(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: t.light ? "#faf4e8" : "#15121f",
+      border: "2px solid rgba(239,68,68,0.4)",
+      borderRadius: 20,
+      padding: 28,
+      maxWidth: 380,
+      width: "100%",
+      animation: "slideUp 0.2s",
+      textAlign: "center"
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 48,
+      marginBottom: 12
+    }
+  }, "\u26A0\uFE0F"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: t.fD,
+      fontSize: 18,
+      color: "#ef4444",
+      marginBottom: 8
+    }
+  }, "Excluir Conlang?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: t.muted,
+      marginBottom: 8,
+      lineHeight: 1.6
+    }
+  }, "Tem certeza que deseja excluir ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: t.text
+    }
+  }, dicts.find(d => d.id === confirmDelete)?.name), "?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#ef4444",
+      background: "rgba(239,68,68,0.1)",
+      border: "1px solid rgba(239,68,68,0.2)",
+      borderRadius: 8,
+      padding: "8px 12px",
+      marginBottom: 20,
+      lineHeight: 1.5
+    }
+  }, "\u26A0\uFE0F Esta a\xE7\xE3o \xE9 irrevers\xEDvel. Todas as palavras, frases, li\xE7\xF5es e gram\xE1tica ser\xE3o apagadas permanentemente."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const toDelete = confirmDelete;
+      setConfirmDelete(null);
+      const remaining = dicts.filter(d => d.id !== toDelete);
+      setDicts(remaining);
+      if (actDict === toDelete) setActDict(remaining[0]?.id || "");
+      notify("Conlang excluída.", "info");
+    },
+    style: {
+      padding: "10px 24px",
+      background: "#ef4444",
+      color: "#fff",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, "Sim, excluir"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmDelete(null),
+    style: {
+      padding: "10px 20px",
+      background: t.surf,
+      color: t.muted,
+      border: `1px solid ${t.cb}`,
+      borderRadius: 10,
+      cursor: "pointer",
+      fontFamily: t.fB,
+      fontSize: 14
+    }
+  }, "Cancelar")))), notif && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       bottom: screen.mobile ? "88px" : "22px",
